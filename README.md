@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mazy Admin
 
-## Getting Started
+Read-only Supabase dashboard for the Mazy student-app dataset. Дипломын ажлын
+тестийн самбар. Reads the same Supabase project as the Mazy student app — schema
+unchanged, SELECT only.
 
-First, run the development server:
+## Local development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`.env.local` must contain three values:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR-ANON-KEY
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+No auth guard — anyone with the URL can read. Keep the deploy URL private (or
+re-add `middleware.ts` later if you need to lock it down).
 
-## Learn More
+## Production build
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run build        # must exit 0 before deploy
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy to Vercel
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm install -g vercel        # хэрэв install хийгээгүй бол
+vercel login
+vercel link                  # repo-г Vercel project-той холбоно
+```
 
-## Deploy on Vercel
+Set the three env vars on Vercel — through the dashboard
+(Project → Settings → Environment Variables) or via CLI:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+vercel env add NEXT_PUBLIC_SUPABASE_URL production
+vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY production
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Then deploy:
+
+```bash
+vercel deploy --prod
+```
+
+Vercel-ийн URL-аа Supabase Auth → URL Configuration → "Site URL" + "Redirect
+URLs"-д нэмж magic link зөв ажиллахаар тохируулна.
+
+## Routes
+
+- `/` — Dashboard: 5 stat cards, completion funnel chart, participant table, CSV
+  export.
+- `/participant/[id]` — One participant: stat row + screen_views, quiz_answers,
+  sus_responses tables.
