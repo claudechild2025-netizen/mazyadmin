@@ -89,6 +89,12 @@ function DialogContent({ data }: { data: Detail }) {
   const survey = (data as any).survey as
     | { id: number; answers: Record<string, unknown>; submitted_at: string }
     | null;
+  const likertResponses = ((data as any).likertResponses ?? []) as {
+    id: number;
+    variant: string;
+    answers: Record<string, unknown>;
+    submitted_at: string;
+  }[];
 
   const correctCount = quizAnswers.filter((a: any) => a.is_correct).length;
   const isLabSlug = (slug: string) =>
@@ -244,11 +250,81 @@ function DialogContent({ data }: { data: Detail }) {
           </tbody>
         </table>
       </Section>
+
+      <Section
+        title="Likert судалгаа · Mazy vs Legacy"
+        subtitle={
+          likertResponses.length > 0
+            ? `${likertResponses.length} variant хариулсан`
+            : 'Likert судалгаанд хариулаагүй'
+        }
+      >
+        {likertResponses.length === 0 ? (
+          <table className="w-full text-sm"><tbody><EmptyRow show cols={2} /></tbody></table>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+              <tr>
+                <Th>Асуулт</Th>
+                {likertResponses.map((lr) => (
+                  <Th key={lr.id} className="text-right">
+                    <span
+                      className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
+                        lr.variant.toLowerCase().includes('mazy')
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}
+                    >
+                      {lr.variant}
+                    </span>
+                  </Th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {LIKERT_QUESTIONS.map((q) => (
+                <tr key={q.key} className="hover:bg-slate-50 align-top">
+                  <Td>
+                    <div className="text-slate-900">{q.label_mn}</div>
+                    <div className="text-xs text-slate-500"><code className="rounded bg-slate-100 px-1 py-0.5">{q.key}</code></div>
+                  </Td>
+                  {likertResponses.map((lr) => (
+                    <Td key={lr.id} className="align-top">
+                      {renderSurveyAnswer(q.kind, (lr.answers as any)[q.key])}
+                    </Td>
+                  ))}
+                </tr>
+              ))}
+              <tr className="bg-slate-50">
+                <Td className="text-xs text-slate-500">Илгээсэн</Td>
+                {likertResponses.map((lr) => (
+                  <Td key={lr.id} className="text-xs text-slate-500">
+                    {new Date(lr.submitted_at).toLocaleString('mn-MN')}
+                  </Td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        )}
+      </Section>
     </>
   );
 }
 
 /* Helpers */
+const LIKERT_QUESTIONS: { key: string; label_mn: string; kind: 'likert' | 'text' | 'consent' }[] = [
+  { key: 'L1_clarity',         label_mn: 'L1 · Ойлгомжтой байдал',         kind: 'likert' },
+  { key: 'L2_info_density',    label_mn: 'L2 · Мэдээллийн хэмжээ',         kind: 'likert' },
+  { key: 'L3_lesson_length',   label_mn: 'L3 · Хичээлийн урт',             kind: 'likert' },
+  { key: 'L4_reuse',           label_mn: 'L4 · Давтан хэрэглэх',           kind: 'likert' },
+  { key: 'L5_recommend',       label_mn: 'L5 · Санал болгох',              kind: 'likert' },
+  { key: 'L6_confidence',      label_mn: 'L6 · Итгэлтэй байдал',           kind: 'likert' },
+  { key: 'L7_cognitive_load',  label_mn: 'L7 · Танин мэдэхүйн ачаалал',    kind: 'likert' },
+  { key: 'B1_liked',           label_mn: 'Б1 · Хамгийн таалагдсан тал',    kind: 'text' },
+  { key: 'B2_improve',         label_mn: 'Б2 · Сайжруулах зүйл',           kind: 'text' },
+  { key: 'B3_extra',           label_mn: 'Б3 · Нэмэлт санал',              kind: 'text' },
+];
+
 const SURVEY_QUESTIONS: { key: string; label_mn: string; kind: 'likert' | 'text' | 'consent'; }[] = [
   { key: 'q1_motion_graphic',       label_mn: 'Q1 · Хөдөлгөөнт график таалагдсан уу?',       kind: 'likert' },
   { key: 'q2_visual_clarity',       label_mn: 'Q2 · Дэлгэц цэвэрхэн харагдаж байсан уу?',     kind: 'likert' },

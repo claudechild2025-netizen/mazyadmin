@@ -284,11 +284,9 @@ export async function getParticipantDetail(userId: string) {
     getPracticeAttemptsForClient(cuid).catch(() => []),
     supabase
       .from('survey_responses')
-      .select('id, answers, submitted_at')
+      .select('id, variant, answers, submitted_at')
       .eq('user_id_client', cuid)
-      .order('submitted_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .order('submitted_at', { ascending: false }),
   ]);
 
   const susResponses = (susEvents.data ?? [])
@@ -300,19 +298,31 @@ export async function getParticipantDetail(userId: string) {
     .filter((r) => Number.isFinite(r.question_number))
     .sort((a, b) => a.question_number - b.question_number);
 
+  const allSurveys = (surveyRow.data ?? []) as any[];
+  const postSession = allSurveys.find((r) => !r.variant) ?? null;
+  const likertResponses = allSurveys
+    .filter((r) => !!r.variant)
+    .map((r) => ({
+      id: r.id as number,
+      variant: r.variant as string,
+      answers: r.answers as Record<string, unknown>,
+      submitted_at: r.submitted_at as string,
+    }));
+
   return {
     user,
     screenViews: screenViews.data ?? [],
     quizAnswers: quizAnswers.data ?? [],
     susResponses,
     practiceAttempts,
-    survey: surveyRow.data
+    survey: postSession
       ? {
-          id: (surveyRow.data as any).id as number,
-          answers: (surveyRow.data as any).answers as Record<string, unknown>,
-          submitted_at: (surveyRow.data as any).submitted_at as string,
+          id: postSession.id as number,
+          answers: postSession.answers as Record<string, unknown>,
+          submitted_at: postSession.submitted_at as string,
         }
       : null,
+    likertResponses,
   };
 }
 
