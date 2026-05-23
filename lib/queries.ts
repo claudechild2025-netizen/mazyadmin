@@ -183,13 +183,22 @@ export async function getParticipants(): Promise<ParticipantRow[]> {
 
   const cuids = users.map((u: any) => u.client_uid);
 
-  const [{ data: answers }, { data: views }, susByClient, { data: legacyEvents }, { data: legacySurveys }] = await Promise.all([
+  const [{ data: answers }, { data: views }, susByClient, { data: legacyEvents }, { data: legacySurveys }, { data: loginEvents }] = await Promise.all([
     supabase.from('quiz_answers').select('client_uid, question_key, is_correct').in('client_uid', cuids),
     supabase.from('screen_views').select('client_uid, screen_slug, time_spent_ms').in('client_uid', cuids),
     getSusByClient(),
     supabase.from('events').select('user_id').eq('event', 'legacy_completed').in('user_id', cuids),
     supabase.from('survey_responses').select('user_id_client').eq('variant', 'legacy').in('user_id_client', cuids),
+    supabase.from('events').select('user_id, meta, inserted_at').eq('event', 'login').in('user_id', cuids).order('inserted_at', { ascending: false }),
   ]);
+
+  // Fallback display_name: latest login event's meta.name per user
+  const nameFromLogin = new Map<string, string>();
+  for (const ev of (loginEvents ?? []) as any[]) {
+    if (nameFromLogin.has(ev.user_id)) continue; // keep latest only (already sorted desc)
+    const n = ev.meta?.name;
+    if (typeof n === 'string' && n.trim()) nameFromLogin.set(ev.user_id, n.trim());
+  }
 
   const legacySet = new Set<string>([
     ...(legacyEvents ?? []).map((e: any) => e.user_id as string),
@@ -220,10 +229,11 @@ export async function getParticipants(): Promise<ParticipantRow[]> {
   return users.map((u: any) => {
     const q = quizByClient.get(u.client_uid);
     const sus = susByClient.get(u.client_uid);
+    const resolvedName = (u.display_name as string | null) || nameFromLogin.get(u.client_uid) || null;
     return {
       id: u.id,
-      short_id: (u.display_name as string) || (u.client_uid as string).slice(0, 8),
-      display_name: (u.display_name as string | null) ?? null,
+      short_id: resolvedName || (u.client_uid as string).slice(0, 8),
+      display_name: resolvedName,
       grade: u.grade ?? null,
       knowledge_level: u.knowledge_level ?? null,
       created_at: u.created_at,
