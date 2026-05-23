@@ -161,11 +161,14 @@ export async function getCompletionFunnel(): Promise<FunnelStep[]> {
 export type ParticipantRow = {
   id: string;
   short_id: string;
+  display_name: string | null;
   grade: number | null;
   knowledge_level: string | null;
   created_at: string;
   completed: boolean;
+  has_legacy: boolean;
   quiz_score: number | null;
+  quiz_details: { key: string; correct: boolean }[];
   sus_score: number | null;
   lab_time_ms: number | null;
 };
@@ -180,18 +183,29 @@ export async function getParticipants(): Promise<ParticipantRow[]> {
 
   const cuids = users.map((u: any) => u.client_uid);
 
-  const [{ data: answers }, { data: views }, susByClient] = await Promise.all([
-    supabase.from('quiz_answers').select('client_uid, is_correct').in('client_uid', cuids),
+  const [{ data: answers }, { data: views }, susByClient, { data: legacyEvents }, { data: legacySurveys }] = await Promise.all([
+    supabase.from('quiz_answers').select('client_uid, question_key, is_correct').in('client_uid', cuids),
     supabase.from('screen_views').select('client_uid, screen_slug, time_spent_ms').in('client_uid', cuids),
     getSusByClient(),
+    supabase.from('events').select('user_id').eq('event', 'legacy_completed').in('user_id', cuids),
+    supabase.from('survey_responses').select('user_id_client').eq('variant', 'legacy').in('user_id_client', cuids),
+  ]);
+
+  const legacySet = new Set<string>([
+    ...(legacyEvents ?? []).map((e: any) => e.user_id as string),
+    ...(legacySurveys ?? []).map((r: any) => r.user_id_client as string),
   ]);
 
   const quizByClient = new Map<string, { correct: number; total: number }>();
+  const quizDetailsByClient = new Map<string, { key: string; correct: boolean }[]>();
   for (const a of (answers ?? []) as any[]) {
     const prev = quizByClient.get(a.client_uid) ?? { correct: 0, total: 0 };
     prev.total += 1;
     if (a.is_correct) prev.correct += 1;
     quizByClient.set(a.client_uid, prev);
+    const details = quizDetailsByClient.get(a.client_uid) ?? [];
+    details.push({ key: a.question_key as string, correct: Boolean(a.is_correct) });
+    quizDetailsByClient.set(a.client_uid, details);
   }
 
   const labByClient = new Map<string, number>();
@@ -209,11 +223,14 @@ export async function getParticipants(): Promise<ParticipantRow[]> {
     return {
       id: u.id,
       short_id: (u.display_name as string) || (u.client_uid as string).slice(0, 8),
+      display_name: (u.display_name as string | null) ?? null,
       grade: u.grade ?? null,
       knowledge_level: u.knowledge_level ?? null,
       created_at: u.created_at,
       completed: doneSet.has(u.client_uid),
+      has_legacy: legacySet.has(u.client_uid),
       quiz_score: q ? q.correct : null,
+      quiz_details: quizDetailsByClient.get(u.client_uid) ?? [],
       sus_score: sus !== undefined ? Math.round(sus * 10) / 10 : null,
       lab_time_ms: labByClient.get(u.client_uid) ?? null,
     };
@@ -496,6 +513,115 @@ async function getPracticeAttemptsForClient(cuid: string): Promise<PracticeAttem
     .order('completed_at');
   if (error) throw error;
   return (data ?? []) as PracticeAttempt[];
+}
+
+/* ============================================================================
+   9. LIKERT SURVEY (L1–L7, Mazy vs Legacy within-subject design)
+   ========================================================================= */
+
+export type LikertResponse = {
+  id: number;
+  user_id_client: string;
+  display_name: string | null;
+  condition: string;
+  l1: number | null;
+  l2: number | null;
+  l3: number | null;
+  l4: number | null;
+  l5: number | null;
+  l6: number | null;
+  l7: number | null;
+  b1: string | null;
+  b2: string | null;
+  b3: string | null;
+  submitted_at: string;
+};
+
+export type LikertMeans = {
+  condition: string;
+  n: number;
+  l1: number | null;
+  l2: number | null;
+  l3: number | null;
+  l4: number | null;
+  l5: number | null;
+  l6: number | null;
+  l7: number | null;
+};
+
+const toNum = (v: unknown): number | null => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+export async function getLikertResponses(): Promise<LikertResponse[]> {
+  // `variant` is a top-level column; answers uses keys like L1_clarity, B1_liked
+  const { data, error } = await supabase
+    .from('survey_responses')
+    .select('id, user_id_client, variant, answers, submitted_at')
+    .not('variant', 'is', null)
+    .order('submitted_at', { ascending: false });
+  if (error) throw error;
+
+  const rows = (data ?? []) as any[];
+  const nameByCuid = await getDisplayNameMap(rows.map((r) => r.user_id_client));
+
+  // Deduplicate by (user_id_client, variant) — keep latest per pair
+  const latestMap = new Map<string, any>();
+  for (const r of rows) {
+    const variant = (r.variant as string) ?? '';
+    if (!variant) continue;
+    const key = `${r.user_id_client}::${variant}`;
+    if (!latestMap.has(key)) latestMap.set(key, r);
+  }
+
+  return Array.from(latestMap.values()).map((r) => {
+    const a = r.answers as Record<string, unknown>;
+    return {
+      id: r.id,
+      user_id_client: r.user_id_client,
+      display_name: nameByCuid.get(r.user_id_client) ?? null,
+      condition: r.variant as string,
+      l1: toNum(a.L1_clarity),
+      l2: toNum(a.L2_info_density),
+      l3: toNum(a.L3_lesson_length),
+      l4: toNum(a.L4_reuse),
+      l5: toNum(a.L5_recommend),
+      l6: toNum(a.L6_confidence),
+      l7: toNum(a.L7_cognitive_load),
+      b1: (a.B1_liked as string) ?? null,
+      b2: (a.B2_improve as string) ?? null,
+      b3: (a.B3_extra as string) ?? null,
+      submitted_at: r.submitted_at,
+    };
+  });
+}
+
+export async function getLikertMeans(): Promise<LikertMeans[]> {
+  const all = await getLikertResponses();
+  const byCondition = new Map<string, LikertResponse[]>();
+  for (const r of all) {
+    const arr = byCondition.get(r.condition) ?? [];
+    arr.push(r);
+    byCondition.set(r.condition, arr);
+  }
+
+  const colMean = (rows: LikertResponse[], key: keyof LikertResponse): number | null => {
+    const nums = rows.map((r) => r[key] as number | null).filter((v): v is number => v !== null);
+    return nums.length === 0 ? null : nums.reduce((a, b) => a + b, 0) / nums.length;
+  };
+
+  return Array.from(byCondition.entries()).map(([condition, rows]) => ({
+    condition,
+    n: rows.length,
+    l1: colMean(rows, 'l1'),
+    l2: colMean(rows, 'l2'),
+    l3: colMean(rows, 'l3'),
+    l4: colMean(rows, 'l4'),
+    l5: colMean(rows, 'l5'),
+    l6: colMean(rows, 'l6'),
+    l7: colMean(rows, 'l7'),
+  }));
 }
 
 /** Look up display_name for a list of client_uids in one round-trip. */

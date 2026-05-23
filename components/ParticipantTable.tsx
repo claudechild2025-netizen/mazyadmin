@@ -1,12 +1,12 @@
 'use client';
 
-import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { Download, ExternalLink, Trash2, Eye } from 'lucide-react';
+import { Download, Trash2, Eye, ClipboardPen } from 'lucide-react';
 import type { ParticipantRow } from '@/lib/queries';
 import { downloadParticipantsCsv } from '@/lib/csv';
 import { deleteUserAction } from '@/app/actions';
 import { ParticipantDialog } from './ParticipantDialog';
+import { ObservationPopup } from './ObservationPopup';
 
 /**
  * Participant table — нэг мөр = нэг оролцогч.
@@ -25,10 +25,18 @@ type SortKey = keyof ParticipantRow;
 export function ParticipantTable({ rows }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [legacyFilter, setLegacyFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [obsRow, setObsRow] = useState<ParticipantRow | null>(null);
+
+  const filtered = useMemo(() => {
+    if (legacyFilter === 'yes') return rows.filter((r) => r.has_legacy);
+    if (legacyFilter === 'no') return rows.filter((r) => !r.has_legacy);
+    return rows;
+  }, [rows, legacyFilter]);
 
   const sorted = useMemo(() => {
-    const arr = [...rows];
+    const arr = [...filtered];
     arr.sort((a, b) => {
       const av = a[sortKey];
       const bv = b[sortKey];
@@ -40,7 +48,7 @@ export function ParticipantTable({ rows }: Props) {
       return 0;
     });
     return arr;
-  }, [rows, sortKey, sortDir]);
+  }, [filtered, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -56,20 +64,37 @@ export function ParticipantTable({ rows }: Props) {
       <div className="flex items-center justify-between p-5 pb-4">
         <div>
           <h2 className="text-base font-semibold text-slate-900">
-            Оролцогчид ({rows.length})
+            Оролцогчид ({sorted.length}/{rows.length})
           </h2>
           <p className="mt-1 text-xs text-slate-500">
             Толгойг товшиж sort хийнэ. CSV-ийг Excel ба Python-руу шууд импортолж болно.
           </p>
         </div>
 
-        <button
-          onClick={() => downloadParticipantsCsv(sorted)}
-          className="flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
-        >
-          <Download size={16} />
-          CSV татах
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg ring-1 ring-slate-200 overflow-hidden text-xs font-medium">
+            {(['all', 'yes', 'no'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setLegacyFilter(v)}
+                className={`px-3 py-2 transition-colors ${
+                  legacyFilter === v
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {v === 'all' ? 'Бүгд' : v === 'yes' ? '📖 Уламжлалт' : '🎯 Зөвхөн Mazy'}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => downloadParticipantsCsv(sorted)}
+            className="flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+          >
+            <Download size={16} />
+            CSV татах
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -90,6 +115,9 @@ export function ParticipantTable({ rows }: Props) {
               </Th>
               <Th onClick={() => toggleSort('completed')} active={sortKey === 'completed'}>
                 Дууссан
+              </Th>
+              <Th onClick={() => toggleSort('has_legacy')} active={sortKey === 'has_legacy'}>
+                Уламжлалт
               </Th>
               <Th onClick={() => toggleSort('quiz_score')} active={sortKey === 'quiz_score'}>
                 Quiz
@@ -127,8 +155,38 @@ export function ParticipantTable({ rows }: Props) {
                     </span>
                   )}
                 </Td>
-                <Td className="tabular">
-                  {row.quiz_score !== null ? `${row.quiz_score}/3` : '—'}
+                <Td>
+                  {row.has_legacy ? (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                      ✓ Үзсэн
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                      Үгүй
+                    </span>
+                  )}
+                </Td>
+                <Td>
+                  {row.quiz_details.length > 0 ? (
+                    <div className="flex items-center gap-1">
+                      {row.quiz_details.map((d) => (
+                        <span
+                          key={d.key}
+                          title={d.key}
+                          className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold ${
+                            d.correct ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                          }`}
+                        >
+                          {d.correct ? '✓' : '✗'}
+                        </span>
+                      ))}
+                      <span className="ml-1 text-xs text-slate-500 tabular-nums">
+                        {row.quiz_score}/{row.quiz_details.length}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
                 </Td>
                 <Td className="tabular">
                   {row.sus_score !== null ? (
@@ -152,6 +210,14 @@ export function ParticipantTable({ rows }: Props) {
                 </Td>
                 <td className="px-3 py-3 text-right">
                   <div className="flex items-center justify-end gap-3">
+                    <button
+                      onClick={() => setObsRow(row)}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 hover:underline"
+                      title="Ажиглалт бүртгэх"
+                    >
+                      <ClipboardPen size={14} />
+                      Ажиглалт
+                    </button>
                     <button
                       onClick={() => setSelectedUserId(row.id)}
                       className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
@@ -181,7 +247,7 @@ export function ParticipantTable({ rows }: Props) {
             ))}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={9} className="py-12 text-center text-sm text-slate-500">
+                <td colSpan={10} className="py-12 text-center text-sm text-slate-500">
                   Одоохондоо оролцогч байхгүй байна.
                 </td>
               </tr>
@@ -194,6 +260,15 @@ export function ParticipantTable({ rows }: Props) {
         <ParticipantDialog
           userId={selectedUserId}
           onClose={() => setSelectedUserId(null)}
+        />
+      )}
+
+      {obsRow && (
+        <ObservationPopup
+          participantId={obsRow.display_name ?? obsRow.short_id}
+          participantLabel={obsRow.display_name ?? obsRow.short_id}
+          grade={obsRow.grade}
+          onClose={() => setObsRow(null)}
         />
       )}
     </div>
