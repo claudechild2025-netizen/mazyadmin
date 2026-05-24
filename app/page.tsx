@@ -286,50 +286,6 @@ export default function Dashboard() {
 
           <CompletionFunnel data={funnel} />
           <ScreenAnalyticsTable rows={screenAnalytics} />
-
-          <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <h2 className="text-base font-semibold text-slate-900">Дасгалын дүн (Phase 3)</h2>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Drill бүрийн оролдлого, дундаж зөв/буруу тоо, дундаж хугацаа.
-            </p>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3 text-left">Хичээл</th>
-                    <th className="px-4 py-3 text-left">Drill</th>
-                    <th className="px-4 py-3 text-left">Төрөл</th>
-                    <th className="px-4 py-3 text-right">Оролдлого</th>
-                    <th className="px-4 py-3 text-right">Дунд. зөв</th>
-                    <th className="px-4 py-3 text-right">Дунд. буруу</th>
-                    <th className="px-4 py-3 text-right">Дунд. хугацаа</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {practiceDrills.map((d, i) => (
-                    <tr key={`${d.lesson_id}:${d.drill_id}:${i}`} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3 font-mono text-xs">{d.lesson_id}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{d.drill_id}</td>
-                      <td className="px-4 py-3 text-slate-500">{d.drill_kind ?? '—'}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">{d.attempts}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">{d.avg_correct.toFixed(1)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">{d.avg_wrong.toFixed(1)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-slate-500">
-                        {d.avg_duration_ms != null ? `${(d.avg_duration_ms / 1000).toFixed(1)}с` : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                  {practiceDrills.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-sm text-slate-500">
-                        Одоохондоо drill хийгдээгүй.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
         </div>
       )}
 
@@ -471,6 +427,58 @@ export default function Dashboard() {
                 </section>
               );
             })}
+
+            {/* Хуучин дасгал — practice attempts summary */}
+            <details className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 mt-6" open>
+              <summary className="cursor-pointer text-base font-semibold text-slate-900 select-none">
+                Хуучин дасгал (Phase 3 practice drills)
+                <span className="ml-2 text-xs font-normal text-slate-500">
+                  {practiceDrills.length} drill
+                </span>
+              </summary>
+              <p className="mt-1 text-xs text-slate-500">
+                Хичээл дотор хийсэн ажиглалт/дасгал. Mazy quiz-ээс тусдаа phase.
+              </p>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Хичээл</th>
+                      <th className="px-4 py-3 text-left">Drill</th>
+                      <th className="px-4 py-3 text-left">Төрөл</th>
+                      <th className="px-4 py-3 text-right">Оролдлого</th>
+                      <th className="px-4 py-3 text-right">Дунд. зөв</th>
+                      <th className="px-4 py-3 text-right">Дунд. буруу</th>
+                      <th className="px-4 py-3 text-right">Дунд. хугацаа</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {practiceDrills.map((d, i) => (
+                      <tr key={`${d.lesson_id}:${d.drill_id}:${i}`} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3 text-slate-700">
+                          {LESSON_NAMES[d.lesson_id] ?? d.lesson_id}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs">{d.drill_id}</td>
+                        <td className="px-4 py-3 text-slate-500">{d.drill_kind ?? '—'}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{d.attempts}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{d.avg_correct.toFixed(1)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-red-600">{d.avg_wrong.toFixed(1)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-slate-500">
+                          {d.avg_duration_ms != null ? `${(d.avg_duration_ms / 1000).toFixed(1)}с` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                    {practiceDrills.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-6 text-center text-sm text-slate-400">
+                          Одоохондоо drill хийгдээгүй.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </details>
           </div>
         );
       })()}
