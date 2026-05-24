@@ -103,45 +103,54 @@ function DialogContent({ data }: { data: Detail }) {
     .filter((v: any) => isLabSlug(v.screen_slug))
     .reduce((acc: number, v: any) => acc + (v.time_spent_ms ?? 0), 0);
 
-  const [tab, setTab] = useState<'detail' | 'observation'>('detail');
+  const [tab, setTab] = useState<'detail' | 'survey' | 'likert' | 'observation'>('detail');
 
   const participantName =
     (user as any)?.display_name || (user as any)?.client_uid?.slice(0, 8) || 'unknown';
+
+  const tabs: { id: typeof tab; label: string; badge?: number | null }[] = [
+    { id: 'detail',      label: 'Дэлгэрэнгүй' },
+    { id: 'survey',      label: 'Санал асуулга', badge: survey ? 1 : 0 },
+    { id: 'likert',      label: 'Likert',        badge: likertResponses.length },
+    { id: 'observation', label: 'Ажиглалт' },
+  ];
 
   return (
     <>
       {/* Tab switcher */}
       <div className="flex gap-1 rounded-xl bg-white p-1 ring-1 ring-slate-200 w-fit">
-        <button
-          onClick={() => setTab('detail')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'detail'
-              ? 'bg-slate-900 text-white'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          Дэлгэрэнгүй
-        </button>
-        <button
-          onClick={() => setTab('observation')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'observation'
-              ? 'bg-slate-900 text-white'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          Ажиглалт
-        </button>
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+              tab === t.id
+                ? 'bg-slate-900 text-white'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            {t.label}
+            {t.badge !== undefined && t.badge !== null && t.badge > 0 && (
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                tab === t.id ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              }`}>
+                {t.badge}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {tab === 'observation' ? (
+      {tab === 'observation' && (
         <ObservationPopup
           embedded
           participantId={participantName}
           participantLabel={participantName}
           grade={(user as any)?.grade ?? null}
         />
-      ) : (
+      )}
+
+      {tab === 'detail' && (
       <>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
@@ -265,91 +274,95 @@ function DialogContent({ data }: { data: Detail }) {
           </tbody>
         </table>
       </Section>
+      </>
+      )}
 
-      <Section
-        title="Санал асуулга"
-        subtitle={survey ? `Илгээсэн: ${new Date(survey.submitted_at).toLocaleString('mn-MN')}` : 'Асуулгад хариулаагүй'}
-      >
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-            <tr><Th>Асуулт</Th><Th>Хариулт</Th></tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {survey ? (
-              SURVEY_QUESTIONS.map((q) => {
-                const raw = (survey.answers as any)[q.key];
-                return (
+      {tab === 'survey' && (
+        <Section
+          title="Санал асуулга"
+          subtitle={survey ? `Илгээсэн: ${new Date(survey.submitted_at).toLocaleString('mn-MN')}` : 'Асуулгад хариулаагүй'}
+        >
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+              <tr><Th>Асуулт</Th><Th>Хариулт</Th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {survey ? (
+                SURVEY_QUESTIONS.map((q) => {
+                  const raw = (survey.answers as any)[q.key];
+                  return (
+                    <tr key={q.key} className="hover:bg-slate-50 align-top">
+                      <Td>
+                        <div className="text-slate-900">{q.label_mn}</div>
+                        <div className="text-xs text-slate-500"><code className="rounded bg-slate-100 px-1 py-0.5">{q.key}</code></div>
+                      </Td>
+                      <Td>{renderSurveyAnswer(q.kind, raw)}</Td>
+                    </tr>
+                  );
+                })
+              ) : <EmptyRow show cols={2} />}
+            </tbody>
+          </table>
+        </Section>
+      )}
+
+      {tab === 'likert' && (
+        <Section
+          title="Likert судалгаа · Mazy vs Legacy"
+          subtitle={
+            likertResponses.length > 0
+              ? `${likertResponses.length} variant хариулсан`
+              : 'Likert судалгаанд хариулаагүй'
+          }
+        >
+          {likertResponses.length === 0 ? (
+            <table className="w-full text-sm"><tbody><EmptyRow show cols={2} /></tbody></table>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                <tr>
+                  <Th>Асуулт</Th>
+                  {likertResponses.map((lr) => (
+                    <Th key={lr.id} className="text-right">
+                      <span
+                        className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
+                          lr.variant.toLowerCase().includes('mazy')
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {lr.variant}
+                      </span>
+                    </Th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {LIKERT_QUESTIONS.map((q) => (
                   <tr key={q.key} className="hover:bg-slate-50 align-top">
                     <Td>
                       <div className="text-slate-900">{q.label_mn}</div>
                       <div className="text-xs text-slate-500"><code className="rounded bg-slate-100 px-1 py-0.5">{q.key}</code></div>
                     </Td>
-                    <Td>{renderSurveyAnswer(q.kind, raw)}</Td>
+                    {likertResponses.map((lr) => (
+                      <Td key={lr.id} className="align-top">
+                        {renderSurveyAnswer(q.kind, (lr.answers as any)[q.key])}
+                      </Td>
+                    ))}
                   </tr>
-                );
-              })
-            ) : <EmptyRow show cols={2} />}
-          </tbody>
-        </table>
-      </Section>
-
-      <Section
-        title="Likert судалгаа · Mazy vs Legacy"
-        subtitle={
-          likertResponses.length > 0
-            ? `${likertResponses.length} variant хариулсан`
-            : 'Likert судалгаанд хариулаагүй'
-        }
-      >
-        {likertResponses.length === 0 ? (
-          <table className="w-full text-sm"><tbody><EmptyRow show cols={2} /></tbody></table>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-              <tr>
-                <Th>Асуулт</Th>
-                {likertResponses.map((lr) => (
-                  <Th key={lr.id} className="text-right">
-                    <span
-                      className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
-                        lr.variant.toLowerCase().includes('mazy')
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}
-                    >
-                      {lr.variant}
-                    </span>
-                  </Th>
                 ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {LIKERT_QUESTIONS.map((q) => (
-                <tr key={q.key} className="hover:bg-slate-50 align-top">
-                  <Td>
-                    <div className="text-slate-900">{q.label_mn}</div>
-                    <div className="text-xs text-slate-500"><code className="rounded bg-slate-100 px-1 py-0.5">{q.key}</code></div>
-                  </Td>
+                <tr className="bg-slate-50">
+                  <Td className="text-xs text-slate-500">Илгээсэн</Td>
                   {likertResponses.map((lr) => (
-                    <Td key={lr.id} className="align-top">
-                      {renderSurveyAnswer(q.kind, (lr.answers as any)[q.key])}
+                    <Td key={lr.id} className="text-xs text-slate-500">
+                      {new Date(lr.submitted_at).toLocaleString('mn-MN')}
                     </Td>
                   ))}
                 </tr>
-              ))}
-              <tr className="bg-slate-50">
-                <Td className="text-xs text-slate-500">Илгээсэн</Td>
-                {likertResponses.map((lr) => (
-                  <Td key={lr.id} className="text-xs text-slate-500">
-                    {new Date(lr.submitted_at).toLocaleString('mn-MN')}
-                  </Td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        )}
-      </Section>
-      </>
+              </tbody>
+            </table>
+          )}
+        </Section>
       )}
     </>
   );
