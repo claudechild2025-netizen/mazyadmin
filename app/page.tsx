@@ -43,6 +43,63 @@ const LESSON_NAMES: Record<string, string> = {
   legacy:      'Уламжлалт',
 };
 
+const QUIZ_PROMPTS: Record<string, Record<string, string>> = {
+  propagation: {
+    q1: 'Гэрэл нэг төрлийн орчинд хэрхэн тархах вэ?',
+  },
+  speed: {
+    q1: 'Вакуумд (хоосон огторгуйд) гэрлийн хурд (c) ойролцоогоор хэд вэ?',
+    q2: 'Гэрэл агаараас усанд орохдоо хурд нь хэрхэн өөрчлөгдөх вэ?',
+    q3: 'Физо гэрлийн хурдыг тооцох томьёо c = 4·N·n·L-д "N" нь юу вэ?',
+  },
+  reflection: {
+    q1: 'Тусах өнцөг 35° байх үед ойлтын өнцөг хэдэн градус байх вэ?',
+    q2: 'Бүх өнцөг алинаас хэмжигддэг вэ?',
+    q3: 'Гэрлийн ойлтын хууль аль гадаргуунд үйлчлэх вэ?',
+  },
+  lenses: {
+    q1: 'Хүнхэр толинд параллел туссан цацраг ойсныхоо дараа хаагуур очих вэ?',
+    q2: 'Бөмбөлөг толины томьёо аль нь вэ?',
+    q3: 'Машины ар талын толь ямар толь вэ?',
+  },
+  refraction: {
+    q1: 'Снеллийн хуулийг илэрхийлэх зөв томьёо аль нь вэ?',
+    q2: 'Бүрэн дотоод ойлт хэзээ үүсэх вэ?',
+    q3: 'Гэрэл нягт орчноос сийрэг рүү орохдоо хэрхэн хугарах вэ?',
+  },
+  prism: {
+    q1: 'Цагаан гэрлийг призмээр нэвтрүүлбэл юу болох вэ?',
+    q2: 'Дисперс гэж юу вэ?',
+    q3: 'Солонго юунаас үүсдэг вэ?',
+  },
+  'lens-eye': {
+    q1: 'Гүдгэр (+) линзний онцлог аль нь вэ?',
+    q2: 'Оптик хүчийг (диоптри) тооцох томьёо аль нь вэ?',
+    q3: 'Миопи (ойрын хараа) гажгийг ямар линзээр засдаг вэ?',
+  },
+  legacy: {
+    'lq-01': 'Гэрэл вакуумд хэдэн км/с хурдтай тархдаг вэ?',
+    'lq-02': 'Физогийн томьёонд N = 720, n = 12.6 эргэлт/с, l = 8 633 м бол c = 4·N·n·l томьёогоор хэд гарах вэ?',
+    'lq-03': 'Тусах өнцөг 35° бол ойлтын өнцөг хэд вэ?',
+    'lq-04': 'Биеийн өндөр 1.6 м бол биеийн бүрэн дүрсийг харахын тулд хавтгай толь хамгийн багадаа хэдэн метр өндөртэй байх шаардлагатай вэ?',
+    'lq-05': 'Хүнхэр толинд бие нь фокусын цэгээс гадуур (a > f) байвал ямар дүрс үүсдэг вэ?',
+    'lq-06': 'n = c/v томьёонд v = 2 × 10⁸ м/с бол n хэд вэ?',
+    'lq-07': 'Усны хугарлын илтгэлцүүр 1.33 бол усны эгзэгтэй өнцгийг тооцоолно уу.',
+    'lq-08': 'Призмээр нарны цагаан гэрэл хэдэн өнгөнд задардаг вэ?',
+    'lq-09': 'Фокусын зай нь 0.5 м цуглуулагч линзний оптик хүч хэд вэ?',
+    'lq-10': 'Холын зүйлийг тод харж чаддаггүй нүдийг (миопи) засахын тулд ямар линзтэй шил зүүх шаардлагатай вэ?',
+    // legacy quiz page tracks as legacy_q1, legacy_q2, legacy_q3 (3 items only)
+    legacy_q1: 'Уламжлалт сорил · 1-р асуулт',
+    legacy_q2: 'Уламжлалт сорил · 2-р асуулт',
+    legacy_q3: 'Уламжлалт сорил · 3-р асуулт',
+  },
+};
+
+function quizPrompt(lessonId: string | null, questionKey: string): string | null {
+  if (!lessonId) return null;
+  return QUIZ_PROMPTS[lessonId]?.[questionKey] ?? null;
+}
+
 const L_LABELS: { key: keyof LikertResponse; tag: string; question: string; note?: string }[] = [
   { key: 'l1', tag: 'L1', question: 'Хичээлийн агуулга надад ойлгомжтой байлаа.' },
   { key: 'l2', tag: 'L2', question: 'Дэлгэцийн мэдээллийн хэмжээ тохиромжтой байлаа — хэт олон биш, хэт цөөн биш.' },
@@ -350,10 +407,17 @@ export default function Dashboard() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {qs.map((q) => (
-                          <tr key={q.question_key} className="hover:bg-slate-50/50">
-                            <td className="px-3 py-2">
-                              <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">{q.question_key}</code>
+                        {qs.map((q) => {
+                          const prompt = quizPrompt(q.lesson_id, q.question_key);
+                          return (
+                          <tr key={q.question_key} className="hover:bg-slate-50/50 align-top">
+                            <td className="px-3 py-2 max-w-md">
+                              <div className="flex items-baseline gap-2">
+                                <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] shrink-0 text-slate-600">{q.question_key}</code>
+                                <span className="text-slate-900">
+                                  {prompt ?? <span className="italic text-slate-400">Текст алга</span>}
+                                </span>
+                              </div>
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums">{q.attempts}</td>
                             <td className="px-3 py-2 text-right tabular-nums font-medium text-emerald-700">{q.correct}</td>
@@ -399,7 +463,8 @@ export default function Dashboard() {
                               </div>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
