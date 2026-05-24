@@ -49,6 +49,7 @@ type Tab = 'overview' | 'participants' | 'survey';
 
 export default function Dashboard() {
   const [tab, setTab] = useState<Tab>('overview');
+  const [surveyTab, setSurveyTab] = useState<'new' | 'old'>('new');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -265,16 +266,33 @@ export default function Dashboard() {
       {tab === 'survey' && (
         <div className="space-y-6">
 
-          {/* ━━━━━━━━━━━━━━━━━━ ШИНЭ АСУУЛГА ━━━━━━━━━━━━━━━━━━ */}
-          <div className="rounded-xl border-2 border-blue-300 bg-blue-50/60 px-4 py-2">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-blue-800">
-              🆕 Шинэ асуулга · Mazy vs Уламжлалт within-subject
-            </h2>
-            <p className="mt-0.5 text-xs text-blue-700">
-              7 Likert (L1–L7) + 3 чөлөөт (B1–B3) · одоогийн судалгааны үндсэн хэрэгсэл
-            </p>
+          {/* Sub-tab switcher: Шинэ / Хуучин */}
+          <div className="flex gap-1 rounded-xl bg-white p-1 ring-1 ring-slate-200 w-fit">
+            <button
+              onClick={() => setSurveyTab('new')}
+              className={`flex items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+                surveyTab === 'new' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              🆕 Шинэ асуулга
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                surveyTab === 'new' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              }`}>{likertRows.length}</span>
+            </button>
+            <button
+              onClick={() => setSurveyTab('old')}
+              className={`flex items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+                surveyTab === 'old' ? 'bg-slate-700 text-white' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              📜 Хуучин асуулга
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                surveyTab === 'old' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              }`}>{surveyRows.length}</span>
+            </button>
           </div>
 
+          {surveyTab === 'new' && <>
           {/* Likert L1–L7 means · Mazy vs Legacy */}
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <h2 className="text-base font-semibold text-slate-900">Likert судалгаа (L1–L7) · Mazy vs Уламжлалт</h2>
@@ -414,16 +432,9 @@ export default function Dashboard() {
             </div>
           </section>
 
-          {/* ━━━━━━━━━━━━━━━━━━ ХУУЧИН АСУУЛГА ━━━━━━━━━━━━━━━━━━ */}
-          <div className="rounded-xl border-2 border-slate-300 bg-slate-50 px-4 py-2 mt-10">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">
-              📜 Хуучин асуулга · Post-session Q1–Q7
-            </h2>
-            <p className="mt-0.5 text-xs text-slate-600">
-              Анх ашиглаж байсан 5 Likert + 1 чөлөөт + 1 зөвшөөрлийн асуулга
-            </p>
-          </div>
+          </>}
 
+          {surveyTab === 'old' && <>
           {/* Өмнөх судалгаа — нэгдсэн үнэлгээ */}
           {(() => {
             const q6Count = surveyRows.filter((r) => {
@@ -616,6 +627,7 @@ export default function Dashboard() {
               </table>
             </div>
           </section>
+          </>}
         </div>
       )}
 
