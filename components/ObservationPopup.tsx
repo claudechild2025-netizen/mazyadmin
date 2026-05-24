@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Play, Pause, Trash2, Download, FileJson, CloudUpload } from 'lucide-react';
-import { uploadObservationEvents, deleteObservationEvent } from '@/lib/queries';
+import { X, Play, Pause, Trash2, Download, FileJson } from 'lucide-react';
+import { uploadObservationEvents, deleteObservationEvent, fetchObservationSession } from '@/lib/queries';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -134,7 +134,33 @@ export function ObservationPopup({
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load session when condition changes
+  // Merge a Supabase row list into a SessionData
+  const applyRemoteEvents = useCallback((local: SessionData, remote: any[]): SessionData => {
+    if (remote.length === 0) return local;
+    const byId = new Map<string, ObsEvent>();
+    for (const e of local.events) byId.set(e.id, e);
+    for (const r of remote) {
+      byId.set(r.event_id, {
+        id: r.event_id,
+        session_time: r.session_time,
+        timestamp: r.timestamp,
+        event_type: r.event_type,
+        screen: r.screen ?? '',
+        duration_sec: r.duration_sec,
+        severity: r.severity,
+        verbatim: r.verbatim ?? '',
+        notes: r.notes ?? '',
+      });
+    }
+    const merged: SessionData = {
+      ...local,
+      events: Array.from(byId.values()).sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
+    };
+    saveSession(merged);
+    return merged;
+  }, []);
+
+  // Load session when condition changes — local first, then Supabase merge
   const switchCondition = useCallback(
     (cond: Condition) => {
       setTimerRunning(false);
@@ -142,9 +168,24 @@ export function ObservationPopup({
       const loaded = loadSession(participantId, cond);
       setCondition(cond);
       setSession(loaded);
+      fetchObservationSession(participantId, cond)
+        .then((remote) => {
+          setSession((prev) => applyRemoteEvents(prev, remote));
+        })
+        .catch(() => {});
     },
-    [participantId],
+    [participantId, applyRemoteEvents],
   );
+
+  // Initial load: fetch Supabase data for default 'Mazy' condition
+  useEffect(() => {
+    fetchObservationSession(participantId, 'Mazy')
+      .then((remote) => {
+        setSession((prev) => applyRemoteEvents(prev, remote));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [participantId]);
 
   // Timer
   useEffect(() => {
@@ -269,35 +310,6 @@ export function ObservationPopup({
     URL.revokeObjectURL(url);
   };
 
-  const [uploading, setUploading] = useState(false);
-  const uploadToSupabase = async () => {
-    if (session.events.length === 0) {
-      setSaveStatus('Хадгалах event алга');
-      return;
-    }
-    setUploading(true);
-    try {
-      const rows = session.events.map((e) => ({
-        event_id: e.id,
-        participant_id: session.participant_id,
-        condition: session.condition,
-        session_time: e.session_time,
-        timestamp: e.timestamp,
-        event_type: e.event_type,
-        screen: e.screen || null,
-        duration_sec: e.duration_sec,
-        severity: e.severity,
-        verbatim: e.verbatim || null,
-        notes: e.notes || null,
-      }));
-      const { inserted } = await uploadObservationEvents(rows);
-      setSaveStatus(`☁ Supabase: ${inserted} event upload хийгдсэн`);
-    } catch (err: any) {
-      setSaveStatus(`Алдаа: ${err.message ?? String(err)}`);
-    } finally {
-      setUploading(false);
-    }
-  };
 
   // Live stats
   const counts = EVENT_TYPES.map((et) => ({
@@ -675,14 +687,6 @@ export function ObservationPopup({
             >
               <FileJson size={13} />
               JSON
-            </button>
-            <button
-              onClick={uploadToSupabase}
-              disabled={uploading || session.events.length === 0}
-              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              <CloudUpload size={13} />
-              {uploading ? 'Илгээж байна…' : 'Supabase'}
             </button>
             {!embedded && (
               <button

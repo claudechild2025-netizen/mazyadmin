@@ -690,6 +690,20 @@ export async function deleteObservationEvent(
   if (error) throw error;
 }
 
+export async function fetchObservationSession(
+  participant_id: string,
+  condition: string,
+): Promise<ObservationEventUpload[]> {
+  const { data, error } = await supabase
+    .from('observation_events')
+    .select('event_id, participant_id, condition, session_time, timestamp, event_type, screen, duration_sec, severity, verbatim, notes')
+    .eq('participant_id', participant_id)
+    .eq('condition', condition)
+    .order('timestamp', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as ObservationEventUpload[];
+}
+
 /** Look up display_name for a list of client_uids in one round-trip. */
 async function getDisplayNameMap(cuids: string[]): Promise<Map<string, string>> {
   if (cuids.length === 0) return new Map();
