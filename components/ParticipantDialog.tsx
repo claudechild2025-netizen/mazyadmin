@@ -104,8 +104,46 @@ function DialogContent({ data }: { data: Detail }) {
     .filter((v: any) => isLabSlug(v.screen_slug))
     .reduce((acc: number, v: any) => acc + (v.time_spent_ms ?? 0), 0);
 
+  const [tab, setTab] = useState<'detail' | 'observation'>('detail');
+
+  const participantName =
+    (user as any)?.display_name || (user as any)?.client_uid?.slice(0, 8) || 'unknown';
+
   return (
     <>
+      {/* Tab switcher */}
+      <div className="flex gap-1 rounded-xl bg-white p-1 ring-1 ring-slate-200 w-fit">
+        <button
+          onClick={() => setTab('detail')}
+          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+            tab === 'detail'
+              ? 'bg-slate-900 text-white'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          Дэлгэрэнгүй
+        </button>
+        <button
+          onClick={() => setTab('observation')}
+          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+            tab === 'observation'
+              ? 'bg-slate-900 text-white'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          Ажиглалт
+        </button>
+      </div>
+
+      {tab === 'observation' ? (
+        <ObservationPopup
+          embedded
+          participantId={participantName}
+          participantLabel={participantName}
+          grade={(user as any)?.grade ?? null}
+        />
+      ) : (
+      <>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
           label="Дэлгэц үзсэн"
@@ -308,20 +346,8 @@ function DialogContent({ data }: { data: Detail }) {
           </table>
         )}
       </Section>
-
-      <Section
-        title="Ажиглалт"
-        subtitle="Судлаач гараар бүртгэдэг — LocalStorage-д хадгалаад Supabase руу upload хий"
-      >
-        <div className="p-4">
-          <ObservationPopup
-            embedded
-            participantId={(user as any)?.display_name || (user as any)?.client_uid?.slice(0, 8) || 'unknown'}
-            participantLabel={(user as any)?.display_name || (user as any)?.client_uid?.slice(0, 8) || 'unknown'}
-            grade={(user as any)?.grade ?? null}
-          />
-        </div>
-      </Section>
+      </>
+      )}
     </>
   );
 }
