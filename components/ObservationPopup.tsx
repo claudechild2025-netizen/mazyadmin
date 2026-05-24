@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Play, Pause, Trash2, Download, FileJson } from 'lucide-react';
+import { X, Play, Pause, Trash2, Download, FileJson, CloudUpload } from 'lucide-react';
+import { uploadObservationEvents } from '@/lib/queries';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -243,6 +244,36 @@ export function ObservationPopup({
     a.download = `obs_${participantId}_${condition}_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const [uploading, setUploading] = useState(false);
+  const uploadToSupabase = async () => {
+    if (session.events.length === 0) {
+      setSaveStatus('Хадгалах event алга');
+      return;
+    }
+    setUploading(true);
+    try {
+      const rows = session.events.map((e) => ({
+        event_id: e.id,
+        participant_id: session.participant_id,
+        condition: session.condition,
+        session_time: e.session_time,
+        timestamp: e.timestamp,
+        event_type: e.event_type,
+        screen: e.screen || null,
+        duration_sec: e.duration_sec,
+        severity: e.severity,
+        verbatim: e.verbatim || null,
+        notes: e.notes || null,
+      }));
+      const { inserted } = await uploadObservationEvents(rows);
+      setSaveStatus(`☁ Supabase: ${inserted} event upload хийгдсэн`);
+    } catch (err: any) {
+      setSaveStatus(`Алдаа: ${err.message ?? String(err)}`);
+    } finally {
+      setUploading(false);
+    }
   };
 
   // Live stats
@@ -608,6 +639,14 @@ export function ObservationPopup({
             >
               <FileJson size={13} />
               JSON
+            </button>
+            <button
+              onClick={uploadToSupabase}
+              disabled={uploading || session.events.length === 0}
+              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              <CloudUpload size={13} />
+              {uploading ? 'Илгээж байна…' : 'Supabase'}
             </button>
             <button
               onClick={onClose}

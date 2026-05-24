@@ -644,6 +644,38 @@ export async function getLikertMeans(): Promise<LikertMeans[]> {
   }));
 }
 
+/* ============================================================================
+   10. OBSERVATION EVENTS — sync LocalStorage sessions to Supabase
+   ========================================================================= */
+
+export type ObservationEventUpload = {
+  event_id: string;
+  participant_id: string;
+  condition: string;
+  session_time: string;
+  timestamp: string;
+  event_type: string;
+  screen: string | null;
+  duration_sec: number | null;
+  severity: number | null;
+  verbatim: string | null;
+  notes: string | null;
+};
+
+export async function uploadObservationEvents(
+  events: ObservationEventUpload[],
+): Promise<{ inserted: number }> {
+  if (events.length === 0) return { inserted: 0 };
+  const { error, count } = await supabase
+    .from('observation_events')
+    .upsert(events, {
+      onConflict: 'participant_id,condition,event_id',
+      count: 'exact',
+    });
+  if (error) throw error;
+  return { inserted: count ?? events.length };
+}
+
 /** Look up display_name for a list of client_uids in one round-trip. */
 async function getDisplayNameMap(cuids: string[]): Promise<Map<string, string>> {
   if (cuids.length === 0) return new Map();
