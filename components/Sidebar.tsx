@@ -2,17 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, ClipboardList, UserCheck, LogOut, BarChart3, Timer, Trophy, Users } from 'lucide-react';
+import { LayoutDashboard, UserCheck, LogOut, BarChart3, Timer, Trophy } from 'lucide-react';
 import { signOut as authSignOut } from '@/lib/auth';
 
 const ITEMS = [
-  { href: '/',             label: 'Хяналт',                  Icon: LayoutDashboard },
-  { href: '/participants', label: 'Оролцогчид',              Icon: Users },
-  { href: '/survey',       label: 'Санал асуулга',           Icon: ClipboardList },
-  { href: '/likert',       label: 'Likert · Mazy vs Legacy', Icon: BarChart3 },
-  { href: '/timing',       label: 'Цагийн харьцуулалт',      Icon: Timer },
-  { href: '/verdict',      label: 'Нэгдсэн үнэлгээ',         Icon: Trophy },
-  { href: '/leads',        label: 'Холбоо барих',            Icon: UserCheck },
+  { href: '/',        label: 'Хяналт',                  Icon: LayoutDashboard },
+  { href: '/likert',  label: 'Likert · Mazy vs Legacy', Icon: BarChart3 },
+  { href: '/timing',  label: 'Цагийн харьцуулалт',      Icon: Timer },
+  { href: '/verdict', label: 'Нэгдсэн үнэлгээ',         Icon: Trophy },
+  { href: '/leads',   label: 'Холбоо барих',            Icon: UserCheck },
 ];
 
 export function Sidebar() {
