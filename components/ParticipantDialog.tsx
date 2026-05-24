@@ -85,7 +85,6 @@ function DialogContent({ data }: { data: Detail }) {
   const user = data.user;
   const screenViews = data.screenViews;
   const quizAnswers = data.quizAnswers;
-  const susResponses = data.susResponses;
   const practiceAttempts = (data as any).practiceAttempts ?? [];
   const survey = (data as any).survey as
     | { id: number; answers: Record<string, unknown>; submitted_at: string }
@@ -164,10 +163,14 @@ function DialogContent({ data }: { data: Detail }) {
           hint="Интерактив дэлгэц"
         />
         <StatCard
-          label="SUS хариулт"
-          value={`${susResponses.length}/10`}
+          label="Likert судалгаа"
+          value={`${likertResponses.length}/2`}
           icon={<Activity size={18} />}
-          hint="асуултын тоо"
+          hint={
+            likertResponses.length === 0
+              ? 'Хариулаагүй'
+              : likertResponses.map((r) => r.variant).join(' + ')
+          }
         />
       </div>
 
@@ -215,7 +218,7 @@ function DialogContent({ data }: { data: Detail }) {
           <tbody className="divide-y divide-slate-100">
             {quizAnswers.map((a: any, i: number) => (
               <tr key={a.id ?? i} className="hover:bg-slate-50">
-                <Td className="text-slate-500">{a.lesson_id ?? '—'}</Td>
+                <Td className="text-slate-700">{lessonName(a.lesson_id)}</Td>
                 <Td><code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">{a.question_key ?? '—'}</code></Td>
                 <Td className="tabular">{a.selected_key ?? '—'}</Td>
                 <Td>
@@ -250,7 +253,7 @@ function DialogContent({ data }: { data: Detail }) {
           <tbody className="divide-y divide-slate-100">
             {practiceAttempts.map((p: any, i: number) => (
               <tr key={p.id ?? i} className="hover:bg-slate-50">
-                <Td className="text-slate-500">{p.lesson_id ?? '—'}</Td>
+                <Td className="text-slate-700">{lessonName(p.lesson_id)}</Td>
                 <Td><code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">{p.drill_id ?? '—'}</code></Td>
                 <Td className="tabular text-right">{p.correct_count}</Td>
                 <Td className="tabular text-right">{p.wrong_count}</Td>
@@ -425,6 +428,22 @@ function Td({ children, className = '' }: { children: React.ReactNode; className
 function EmptyRow({ show, cols }: { show: boolean; cols: number }) {
   if (!show) return null;
   return <tr><td colSpan={cols} className="py-8 text-center text-sm text-slate-500">Өгөгдөл байхгүй.</td></tr>;
+}
+
+const LESSON_NAMES: Record<string, string> = {
+  propagation: 'Гэрлийн тархалт',
+  speed:       'Гэрлийн хурд',
+  reflection:  'Гэрлийн ойлт',
+  lenses:      'Бөмбөлөг толь ба линз',
+  refraction:  'Гэрлийн хугарал',
+  prism:       'Призм ба дисперс',
+  'lens-eye':  'Линз ба Хүний нүд',
+  legacy:      'Уламжлалт',
+};
+
+function lessonName(id: string | null | undefined): string {
+  if (!id) return '—';
+  return LESSON_NAMES[id] ?? id;
 }
 
 function translateLevel(level: string | null | undefined): string {
