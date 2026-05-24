@@ -1050,6 +1050,99 @@ const L_LABELS = [
 ];
 
 /* ============================================================================
+   13. QUIZ QUESTION ANALYTICS — per-question correctness across all users
+   ========================================================================= */
+
+export type QuizQuestionStat = {
+  lesson_id: string | null;
+  question_key: string;
+  attempts: number;
+  correct: number;
+  wrong: number;
+  accuracy: number;       // 0..1
+  avg_time_ms: number | null;
+  option_dist: Record<string, { count: number; correct: boolean }>;
+};
+
+export async function getQuizQuestionStats(): Promise<QuizQuestionStat[]> {
+  const { data, error } = await supabase
+    .from('quiz_answers')
+    .select('lesson_id, question_key, selected_key, is_correct, time_to_answer_ms');
+  if (error) throw error;
+
+  // Identify correct answer per question by majority — pick the most-frequent
+  // selected_key whose is_correct=true.
+  const correctKeyOf = new Map<string, string>();
+  for (const a of (data ?? []) as any[]) {
+    if (!a.is_correct) continue;
+    const k = `${a.lesson_id ?? '_'}::${a.question_key}`;
+    if (!correctKeyOf.has(k)) correctKeyOf.set(k, a.selected_key);
+  }
+
+  const bucket = new Map<string, {
+    lesson_id: string | null;
+    question_key: string;
+    attempts: number;
+    correct: number;
+    wrong: number;
+    time_total: number;
+    time_count: number;
+    options: Map<string, number>;
+  }>();
+
+  for (const a of (data ?? []) as any[]) {
+    const k = `${a.lesson_id ?? '_'}::${a.question_key}`;
+    let b = bucket.get(k);
+    if (!b) {
+      b = {
+        lesson_id: a.lesson_id ?? null,
+        question_key: a.question_key,
+        attempts: 0, correct: 0, wrong: 0,
+        time_total: 0, time_count: 0,
+        options: new Map(),
+      };
+      bucket.set(k, b);
+    }
+    b.attempts += 1;
+    if (a.is_correct) b.correct += 1;
+    else b.wrong += 1;
+    if (typeof a.time_to_answer_ms === 'number' && a.time_to_answer_ms > 0) {
+      b.time_total += a.time_to_answer_ms;
+      b.time_count += 1;
+    }
+    if (typeof a.selected_key === 'string' && a.selected_key.length > 0) {
+      b.options.set(a.selected_key, (b.options.get(a.selected_key) ?? 0) + 1);
+    }
+  }
+
+  const rows: QuizQuestionStat[] = [];
+  for (const [k, b] of bucket) {
+    const correctKey = correctKeyOf.get(k);
+    const option_dist: QuizQuestionStat['option_dist'] = {};
+    for (const [opt, count] of b.options) {
+      option_dist[opt] = { count, correct: opt === correctKey };
+    }
+    rows.push({
+      lesson_id: b.lesson_id,
+      question_key: b.question_key,
+      attempts: b.attempts,
+      correct: b.correct,
+      wrong: b.wrong,
+      accuracy: b.attempts > 0 ? b.correct / b.attempts : 0,
+      avg_time_ms: b.time_count > 0 ? Math.round(b.time_total / b.time_count) : null,
+      option_dist,
+    });
+  }
+  rows.sort((a, b) => {
+    const al = a.lesson_id ?? '';
+    const bl = b.lesson_id ?? '';
+    if (al !== bl) return al.localeCompare(bl);
+    return a.question_key.localeCompare(b.question_key);
+  });
+  return rows;
+}
+
+/* ============================================================================
    7. SCREEN ANALYTICS — per-surface views / taps / avg time
    ========================================================================= */
 

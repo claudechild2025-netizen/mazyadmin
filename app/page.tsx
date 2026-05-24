@@ -20,6 +20,7 @@ import {
   getSurveyMeans,
   getLikertResponses,
   getLikertMeans,
+  getQuizQuestionStats,
   type FunnelStep,
   type ParticipantRow,
   type ScreenAnalyticRow,
@@ -28,7 +29,19 @@ import {
   type SurveyMeans,
   type LikertResponse,
   type LikertMeans,
+  type QuizQuestionStat,
 } from '@/lib/queries';
+
+const LESSON_NAMES: Record<string, string> = {
+  propagation: 'Гэрлийн тархалт',
+  speed:       'Гэрлийн хурд',
+  reflection:  'Гэрлийн ойлт',
+  lenses:      'Бөмбөлөг толь ба линз',
+  refraction:  'Гэрлийн хугарал',
+  prism:       'Призм ба дисперс',
+  'lens-eye':  'Линз ба Хүний нүд',
+  legacy:      'Уламжлалт',
+};
 
 const L_LABELS: { key: keyof LikertResponse; tag: string; question: string; note?: string }[] = [
   { key: 'l1', tag: 'L1', question: 'Хичээлийн агуулга надад ойлгомжтой байлаа.' },
@@ -68,11 +81,12 @@ export default function Dashboard() {
   const [surveyRows, setSurveyRows] = useState<SurveyResponse[]>([]);
   const [likertRows, setLikertRows] = useState<LikertResponse[]>([]);
   const [likertMeans, setLikertMeans] = useState<LikertMeans[]>([]);
+  const [quizStats, setQuizStats] = useState<QuizQuestionStat[]>([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const [total, completed, sus, quizMs, labMs, fnl, sAnalytics, pDrills, parts, sMeans, sRows, lRows, lMeans] =
+        const [total, completed, sus, quizMs, labMs, fnl, sAnalytics, pDrills, parts, sMeans, sRows, lRows, lMeans, qStats] =
           await Promise.all([
             getTotalParticipants(),
             getCompletedLessons(),
@@ -87,6 +101,7 @@ export default function Dashboard() {
             getSurveyResponses().catch(() => []),
             getLikertResponses().catch(() => []),
             getLikertMeans().catch(() => []),
+            getQuizQuestionStats().catch(() => []),
           ]);
         setStats({ total, completed, sus, quizMs, labMs });
         setFunnel(fnl);
@@ -97,6 +112,7 @@ export default function Dashboard() {
         setSurveyRows(sRows);
         setLikertRows(lRows);
         setLikertMeans(lMeans);
+        setQuizStats(qStats);
       } catch (err: any) {
         setError(err.message ?? String(err));
       } finally {
@@ -211,6 +227,90 @@ export default function Dashboard() {
           </div>
 
           <CompletionFunnel data={funnel} />
+
+          {/* Quiz question correctness board */}
+          <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+            <h2 className="text-base font-semibold text-slate-900">Quiz асуулт тус бүрд</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Хичээлийн дараах мэдлэг батлах асуулт бүрд хэдэн оролцогч зөв/буруу хариулсан
+            </p>
+            {quizStats.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-400">Quiz хариулт алга.</p>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Хичээл</th>
+                      <th className="px-3 py-2 text-left">Асуулт</th>
+                      <th className="px-3 py-2 text-right">Нийт</th>
+                      <th className="px-3 py-2 text-right">Зөв</th>
+                      <th className="px-3 py-2 text-right">Буруу</th>
+                      <th className="px-3 py-2 text-right">Нарийвчлал</th>
+                      <th className="px-3 py-2 text-right">Дунд. хугацаа</th>
+                      <th className="px-3 py-2 text-left">Сонголтын тархалт</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {quizStats.map((q) => (
+                      <tr key={`${q.lesson_id ?? '_'}::${q.question_key}`} className="hover:bg-slate-50/50">
+                        <td className="px-3 py-2 text-slate-700">
+                          {q.lesson_id ? (LESSON_NAMES[q.lesson_id] ?? q.lesson_id) : '—'}
+                        </td>
+                        <td className="px-3 py-2">
+                          <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">{q.question_key}</code>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{q.attempts}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-medium text-emerald-700">{q.correct}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-medium text-red-600">{q.wrong}</td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <span className={`font-semibold tabular-nums ${
+                              q.accuracy >= 0.7 ? 'text-emerald-700' : q.accuracy >= 0.4 ? 'text-amber-700' : 'text-red-600'
+                            }`}>
+                              {Math.round(q.accuracy * 100)}%
+                            </span>
+                            <div className="h-2 w-16 rounded-full bg-slate-100 overflow-hidden">
+                              <div
+                                className={
+                                  q.accuracy >= 0.7 ? 'h-full bg-emerald-400'
+                                  : q.accuracy >= 0.4 ? 'h-full bg-amber-400'
+                                  : 'h-full bg-red-400'
+                                }
+                                style={{ width: `${q.accuracy * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                          {q.avg_time_ms !== null ? `${(q.avg_time_ms / 1000).toFixed(1)}с` : '—'}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-wrap gap-1">
+                            {Object.entries(q.option_dist)
+                              .sort((a, b) => b[1].count - a[1].count)
+                              .map(([opt, info]) => (
+                                <span
+                                  key={opt}
+                                  className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                                    info.correct
+                                      ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
+                                      : 'bg-slate-100 text-slate-700'
+                                  }`}
+                                >
+                                  {info.correct && '✓ '}{opt}: {info.count}
+                                </span>
+                              ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
           <ScreenAnalyticsTable rows={screenAnalytics} />
 
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
