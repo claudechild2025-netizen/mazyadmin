@@ -109,11 +109,13 @@ export function ObservationPopup({
   participantLabel,
   grade,
   onClose,
+  embedded = false,
 }: {
   participantId: string;
   participantLabel: string;
   grade?: number | null;
-  onClose: () => void;
+  onClose?: () => void;
+  embedded?: boolean;
 }) {
   const [condition, setCondition] = useState<Condition>('Mazy');
   const [session, setSession] = useState<SessionData>(() => loadSession(participantId, 'Mazy'));
@@ -162,11 +164,12 @@ export function ObservationPopup({
     };
   }, [timerRunning]);
 
-  // Body scroll lock
+  // Body scroll lock — modal only
   useEffect(() => {
+    if (embedded) return;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
-  }, []);
+  }, [embedded]);
 
   const persist = useCallback((updated: SessionData) => {
     const ok = saveSession(updated);
@@ -303,27 +306,40 @@ export function ObservationPopup({
         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
     }`;
 
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-
-        {/* ── A. Header ─────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">
-              {participantLabel.replace(/[^A-Z0-9]/gi, '').slice(0, 3).toUpperCase()}
-            </div>
-            <div>
-              <p className="font-bold text-slate-900">{participantLabel}</p>
-              <p className="text-xs text-slate-500">
-                {grade ? `${grade}-р анги · ` : ''}Ажиглалтын session
-              </p>
-            </div>
+  const Outer = embedded
+    ? ({ children }: { children: React.ReactNode }) => (
+        <div className="relative w-full bg-white rounded-2xl ring-1 ring-slate-200 flex flex-col overflow-hidden">{children}</div>
+      )
+    : ({ children }: { children: React.ReactNode }) => (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+            {children}
           </div>
-          <button onClick={onClose} className="p-2 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-            <X size={18} />
-          </button>
         </div>
+      );
+
+  return (
+    <Outer>
+
+        {/* ── A. Header (modal only) ────────────────────────────────────── */}
+        {!embedded && (
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">
+                {participantLabel.replace(/[^A-Z0-9]/gi, '').slice(0, 3).toUpperCase()}
+              </div>
+              <div>
+                <p className="font-bold text-slate-900">{participantLabel}</p>
+                <p className="text-xs text-slate-500">
+                  {grade ? `${grade}-р анги · ` : ''}Ажиглалтын session
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+              <X size={18} />
+            </button>
+          </div>
+        )}
 
         {/* ── B. Session bar ────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-200 shrink-0">
@@ -648,17 +664,18 @@ export function ObservationPopup({
               <CloudUpload size={13} />
               {uploading ? 'Илгээж байна…' : 'Supabase'}
             </button>
-            <button
-              onClick={onClose}
-              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
-            >
-              Session дуусгах
-            </button>
+            {!embedded && (
+              <button
+                onClick={onClose}
+                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+              >
+                Session дуусгах
+              </button>
+            )}
           </div>
         </div>
 
-      </div>
-    </div>
+    </Outer>
   );
 }
 

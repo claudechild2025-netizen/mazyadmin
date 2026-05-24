@@ -1,12 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Download, Trash2, Eye, ClipboardPen } from 'lucide-react';
+import { Download, Trash2, Eye } from 'lucide-react';
 import type { ParticipantRow } from '@/lib/queries';
 import { downloadParticipantsCsv } from '@/lib/csv';
 import { deleteUserAction } from '@/app/actions';
 import { ParticipantDialog } from './ParticipantDialog';
-import { ObservationPopup } from './ObservationPopup';
 
 /**
  * Participant table — нэг мөр = нэг оролцогч.
@@ -27,7 +26,6 @@ export function ParticipantTable({ rows }: Props) {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [legacyFilter, setLegacyFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [obsRow, setObsRow] = useState<ParticipantRow | null>(null);
 
   const filtered = useMemo(() => {
     if (legacyFilter === 'yes') return rows.filter((r) => r.has_legacy);
@@ -211,14 +209,6 @@ export function ParticipantTable({ rows }: Props) {
                 <td className="px-3 py-3 text-right">
                   <div className="flex items-center justify-end gap-3">
                     <button
-                      onClick={() => setObsRow(row)}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 hover:underline"
-                      title="Ажиглалт бүртгэх"
-                    >
-                      <ClipboardPen size={14} />
-                      Ажиглалт
-                    </button>
-                    <button
                       onClick={() => setSelectedUserId(row.id)}
                       className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
                     >
@@ -260,15 +250,6 @@ export function ParticipantTable({ rows }: Props) {
         <ParticipantDialog
           userId={selectedUserId}
           onClose={() => setSelectedUserId(null)}
-        />
-      )}
-
-      {obsRow && (
-        <ObservationPopup
-          participantId={obsRow.display_name ?? obsRow.short_id}
-          participantLabel={obsRow.display_name ?? obsRow.short_id}
-          grade={obsRow.grade}
-          onClose={() => setObsRow(null)}
         />
       )}
     </div>

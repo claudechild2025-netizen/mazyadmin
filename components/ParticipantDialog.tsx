@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { X, Eye, ListChecks, Activity } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
+import { ObservationPopup } from '@/components/ObservationPopup';
 import { getParticipantDetail } from '@/lib/queries';
 
 type Detail = Awaited<ReturnType<typeof getParticipantDetail>>;
@@ -306,6 +307,20 @@ function DialogContent({ data }: { data: Detail }) {
             </tbody>
           </table>
         )}
+      </Section>
+
+      <Section
+        title="Ажиглалт"
+        subtitle="Судлаач гараар бүртгэдэг — LocalStorage-д хадгалаад Supabase руу upload хий"
+      >
+        <div className="p-4">
+          <ObservationPopup
+            embedded
+            participantId={(user as any)?.display_name || (user as any)?.client_uid?.slice(0, 8) || 'unknown'}
+            participantLabel={(user as any)?.display_name || (user as any)?.client_uid?.slice(0, 8) || 'unknown'}
+            grade={(user as any)?.grade ?? null}
+          />
+        </div>
       </Section>
     </>
   );
