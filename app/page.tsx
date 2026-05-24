@@ -18,13 +18,32 @@ import {
   getPracticeDrillSummary,
   getSurveyResponses,
   getSurveyMeans,
+  getLikertResponses,
+  getLikertMeans,
   type FunnelStep,
   type ParticipantRow,
   type ScreenAnalyticRow,
   type PracticeDrillRow,
   type SurveyResponse,
   type SurveyMeans,
+  type LikertResponse,
+  type LikertMeans,
 } from '@/lib/queries';
+
+const L_LABELS: { key: keyof LikertResponse; label: string; note?: string }[] = [
+  { key: 'l1', label: 'L1 · Ойлгомжтой' },
+  { key: 'l2', label: 'L2 · Мэдээллийн хэмжээ' },
+  { key: 'l3', label: 'L3 · Хичээлийн урт', note: '1=богино, 3=зөв, 5=урт' },
+  { key: 'l4', label: 'L4 · Давтан хэрэглэх' },
+  { key: 'l5', label: 'L5 · Санал болгох' },
+  { key: 'l6', label: 'L6 · Итгэлтэй' },
+  { key: 'l7', label: 'L7 · Ачаалал', note: 'Бага = сайн' },
+];
+const B_LABELS: { key: keyof LikertResponse; label: string }[] = [
+  { key: 'b1', label: 'Б1 · Хамгийн сайн' },
+  { key: 'b2', label: 'Б2 · Сайжруулах' },
+  { key: 'b3', label: 'Б3 · Нэмэлт' },
+];
 
 type Tab = 'overview' | 'participants' | 'survey';
 
@@ -46,11 +65,13 @@ export default function Dashboard() {
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [surveyMeans, setSurveyMeans] = useState<SurveyMeans | null>(null);
   const [surveyRows, setSurveyRows] = useState<SurveyResponse[]>([]);
+  const [likertRows, setLikertRows] = useState<LikertResponse[]>([]);
+  const [likertMeans, setLikertMeans] = useState<LikertMeans[]>([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const [total, completed, sus, quizMs, labMs, fnl, sAnalytics, pDrills, parts, sMeans, sRows] =
+        const [total, completed, sus, quizMs, labMs, fnl, sAnalytics, pDrills, parts, sMeans, sRows, lRows, lMeans] =
           await Promise.all([
             getTotalParticipants(),
             getCompletedLessons(),
@@ -63,6 +84,8 @@ export default function Dashboard() {
             getParticipants().catch(() => []),
             getSurveyMeans().catch(() => null),
             getSurveyResponses().catch(() => []),
+            getLikertResponses().catch(() => []),
+            getLikertMeans().catch(() => []),
           ]);
         setStats({ total, completed, sus, quizMs, labMs });
         setFunnel(fnl);
@@ -71,6 +94,8 @@ export default function Dashboard() {
         setParticipants(parts);
         setSurveyMeans(sMeans);
         setSurveyRows(sRows);
+        setLikertRows(lRows);
+        setLikertMeans(lMeans);
       } catch (err: any) {
         setError(err.message ?? String(err));
       } finally {
@@ -108,7 +133,7 @@ export default function Dashboard() {
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: 'overview',     label: 'Хяналт' },
     { id: 'participants', label: 'Оролцогчид',   badge: participants.length },
-    { id: 'survey',       label: 'Санал асуулга', badge: surveyRows.length },
+    { id: 'survey',       label: 'Санал асуулга', badge: likertRows.length },
   ];
 
   return (
@@ -239,8 +264,143 @@ export default function Dashboard() {
       {/* ─── Survey tab ─────────────────────────────────────────────────── */}
       {tab === 'survey' && (
         <div className="space-y-6">
+
+          {/* Likert L1–L7 means · Mazy vs Legacy */}
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <h2 className="text-base font-semibold text-slate-900">Likert дундаж (1–5)</h2>
+            <h2 className="text-base font-semibold text-slate-900">Likert судалгаа (L1–L7) · Mazy vs Уламжлалт</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              7 Likert + 3 чөлөөт асуулт · within-subject · L7 бага бол сайн (танин мэдэхүйн ачаалал)
+            </p>
+            {likertMeans.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-400">Одоогоор хариу алга.</p>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Асуулт</th>
+                      {likertMeans.map((m) => (
+                        <th key={m.condition} className="px-3 py-2 text-right">
+                          {m.condition} <span className="text-slate-400">(n={m.n})</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {L_LABELS.map(({ key, label, note }) => (
+                      <tr key={String(key)} className="hover:bg-slate-50/50">
+                        <td className="px-3 py-2">
+                          <span className="font-medium text-slate-900">{label}</span>
+                          {note && <span className="ml-2 text-[10px] text-slate-400">{note}</span>}
+                        </td>
+                        {likertMeans.map((m) => {
+                          const v = m[key as keyof LikertMeans] as number | null;
+                          return (
+                            <td key={m.condition} className="px-3 py-2 text-right tabular-nums">
+                              {v !== null ? v.toFixed(2) : <span className="text-slate-300">—</span>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* B1–B3 open-ended quotes */}
+          {B_LABELS.map(({ key, label }) => {
+            const quotes = likertRows.filter((r) => {
+              const v = r[key];
+              return typeof v === 'string' && v.trim().length > 0;
+            });
+            if (quotes.length === 0) return null;
+            return (
+              <section key={String(key)} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <h2 className="text-base font-semibold text-slate-900">{label}</h2>
+                <div className="mt-4 space-y-3">
+                  {quotes.map((r) => (
+                    <blockquote
+                      key={r.id}
+                      className={`rounded-lg border-l-4 px-4 py-3 text-sm ${
+                        r.condition.toLowerCase().includes('mazy')
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-amber-500 bg-amber-50'
+                      }`}
+                    >
+                      &ldquo;{String(r[key])}&rdquo;
+                      <footer className="mt-2 text-xs text-slate-500">
+                        <span className="font-medium text-slate-700">
+                          {r.display_name || r.user_id_client.slice(0, 8)}
+                        </span>
+                        {' · '}
+                        <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+                          r.condition.toLowerCase().includes('mazy')
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>{r.condition}</span>
+                        {' · '}
+                        {new Date(r.submitted_at).toLocaleString('mn-MN')}
+                      </footer>
+                    </blockquote>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+
+          {/* Per-participant Likert table */}
+          <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+            <h2 className="text-base font-semibold text-slate-900">Likert бүх хариу</h2>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Оролцогч</th>
+                    <th className="px-3 py-2 text-left">Нөхцөл</th>
+                    {(['l1','l2','l3','l4','l5','l6','l7'] as const).map((k) => (
+                      <th key={k} className="px-3 py-2 text-right">{k.toUpperCase()}</th>
+                    ))}
+                    <th className="px-3 py-2 text-left">Огноо</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {likertRows.map((r) => (
+                    <tr key={r.id} className="hover:bg-slate-50/50">
+                      <td className="px-3 py-2 font-medium text-slate-900">
+                        {r.display_name || r.user_id_client.slice(0, 8)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+                          r.condition.toLowerCase().includes('mazy')
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>{r.condition}</span>
+                      </td>
+                      {(['l1','l2','l3','l4','l5','l6','l7'] as const).map((k) => (
+                        <td key={k} className="px-3 py-2 text-right tabular-nums">
+                          {r[k] ?? <span className="text-slate-300">—</span>}
+                        </td>
+                      ))}
+                      <td className="px-3 py-2 text-slate-500 text-xs">
+                        {new Date(r.submitted_at).toLocaleString('mn-MN')}
+                      </td>
+                    </tr>
+                  ))}
+                  {likertRows.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="py-6 text-center text-slate-500">Хариу алга.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Old post-session Q1-Q5 means */}
+          <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+            <h2 className="text-base font-semibold text-slate-900">Хуучин post-session асуулга (Q1–Q5)</h2>
             <p className="mt-0.5 text-xs text-slate-500">
               n = {surveyMeans?.n_responses ?? 0} хариу. 4-өөс дээш бол positive feedback.
             </p>
@@ -298,29 +458,52 @@ export default function Dashboard() {
               <table className="w-full text-sm">
                 <thead className="text-xs uppercase text-slate-500">
                   <tr>
-                    <th className="py-2 text-left">Нэр</th>
-                    <th className="text-left">Q1</th>
-                    <th className="text-left">Q2</th>
-                    <th className="text-left">Q3</th>
-                    <th className="text-left">Q4</th>
-                    <th className="text-left">Q5</th>
-                    <th className="text-left">Огноо</th>
+                    <th className="py-2 px-2 text-left">Нэр</th>
+                    <th className="px-2 text-right">Q1</th>
+                    <th className="px-2 text-right">Q2</th>
+                    <th className="px-2 text-right">Q3</th>
+                    <th className="px-2 text-right">Q4</th>
+                    <th className="px-2 text-right">Q5</th>
+                    <th className="px-2 text-left">Q6 · Чөлөөт санал</th>
+                    <th className="px-2 text-left">Q7 · Зөвшөөрөл</th>
+                    <th className="px-2 text-left">Огноо</th>
                   </tr>
                 </thead>
                 <tbody>
                   {surveyRows.map((r) => {
                     const a = r.answers as Record<string, unknown>;
+                    const q7 = (a.q7_consent ?? {}) as { consent?: string; contact?: string };
+                    const q6 = a.q6_open_feedback as string | undefined;
                     return (
-                      <tr key={r.id} className="border-t border-slate-100">
-                        <td className="py-2 font-medium text-slate-900">
+                      <tr key={r.id} className="border-t border-slate-100 align-top">
+                        <td className="py-2 px-2 font-medium text-slate-900">
                           {r.display_name || r.user_id_client.slice(0, 8)}
                         </td>
-                        <td>{String(a.q1_motion_graphic ?? '')}</td>
-                        <td>{String(a.q2_visual_clarity ?? '')}</td>
-                        <td>{String(a.q3_navigation ?? '')}</td>
-                        <td>{String(a.q4_color_palette ?? '')}</td>
-                        <td>{String(a.q5_mascot_microlearning ?? '')}</td>
-                        <td className="text-slate-500">
+                        <td className="px-2 text-right tabular-nums">{String(a.q1_motion_graphic ?? '—')}</td>
+                        <td className="px-2 text-right tabular-nums">{String(a.q2_visual_clarity ?? '—')}</td>
+                        <td className="px-2 text-right tabular-nums">{String(a.q3_navigation ?? '—')}</td>
+                        <td className="px-2 text-right tabular-nums">{String(a.q4_color_palette ?? '—')}</td>
+                        <td className="px-2 text-right tabular-nums">{String(a.q5_mascot_microlearning ?? '—')}</td>
+                        <td className="px-2 max-w-xs">
+                          {q6 && q6.trim() ? (
+                            <span className="text-xs italic text-slate-700">&ldquo;{q6}&rdquo;</span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-2">
+                          {q7.consent === 'yes' ? (
+                            <div className="space-y-0.5">
+                              <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800">✓ Тийм</span>
+                              {q7.contact && <div className="text-[11px] text-slate-600">{q7.contact}</div>}
+                            </div>
+                          ) : q7.consent ? (
+                            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{q7.consent}</span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-2 text-slate-500 text-xs">
                           {new Date(r.submitted_at).toLocaleString('mn-MN')}
                         </td>
                       </tr>
@@ -328,7 +511,7 @@ export default function Dashboard() {
                   })}
                   {surveyRows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-6 text-center text-slate-500">
+                      <td colSpan={9} className="py-6 text-center text-slate-500">
                         Хариу алга.
                       </td>
                     </tr>
