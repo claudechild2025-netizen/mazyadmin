@@ -692,6 +692,132 @@ async function getDisplayNameMap(cuids: string[]): Promise<Map<string, string>> 
 }
 
 /* ============================================================================
+   11. TIMING COMPARISON — Mazy vs Legacy time-on-task
+   ========================================================================= */
+
+export type TimingRow = {
+  client_uid: string;
+  display_name: string | null;
+  mazy_total_ms: number | null;
+  mazy_intro_ms: number;
+  mazy_video_ms: number;
+  mazy_lab_ms: number;
+  mazy_practice_ms: number;
+  mazy_quiz_ms: number;
+  legacy_total_ms: number | null;
+};
+
+export type TimingSummary = {
+  n_mazy: number;
+  n_legacy: number;
+  n_both: number;
+  mazy_mean_ms: number | null;
+  legacy_mean_ms: number | null;
+  mazy_median_ms: number | null;
+  legacy_median_ms: number | null;
+  mazy_screens: {
+    intro: number | null;
+    video: number | null;
+    lab: number | null;
+    practice: number | null;
+    quiz: number | null;
+  };
+};
+
+const median = (xs: number[]): number | null => {
+  if (xs.length === 0) return null;
+  const sorted = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+};
+
+export async function getTimingComparison(): Promise<{
+  rows: TimingRow[];
+  summary: TimingSummary;
+}> {
+  const [{ data: users }, { data: views }, { data: legacyEvents }] = await Promise.all([
+    supabase.from('users').select('client_uid, display_name'),
+    supabase.from('screen_views').select('client_uid, screen_slug, time_spent_ms'),
+    supabase.from('events').select('user_id, meta').eq('event', 'legacy_completed'),
+  ]);
+
+  const bucketOf = (slug: string): keyof TimingRow | null => {
+    if (slug.startsWith('lesson_intro:'))    return 'mazy_intro_ms';
+    if (slug.startsWith('motion_player:'))   return 'mazy_video_ms';
+    if (slug.startsWith('lab:') || slug.startsWith('lesson_lab:')) return 'mazy_lab_ms';
+    if (slug.startsWith('lesson_practice:')) return 'mazy_practice_ms';
+    if (slug.startsWith('quiz:'))            return 'mazy_quiz_ms';
+    return null;
+  };
+
+  const mazyByClient = new Map<string, Record<string, number>>();
+  for (const v of (views ?? []) as any[]) {
+    const bucket = bucketOf(v.screen_slug);
+    if (!bucket) continue;
+    const acc = mazyByClient.get(v.client_uid) ?? {};
+    acc[bucket] = (acc[bucket] ?? 0) + (v.time_spent_ms ?? 0);
+    mazyByClient.set(v.client_uid, acc);
+  }
+
+  const legacyByClient = new Map<string, number>();
+  for (const ev of (legacyEvents ?? []) as any[]) {
+    const ms = Number(ev.meta?.study_ms);
+    if (!Number.isFinite(ms)) continue;
+    // Sum across multiple sessions in case the participant retried
+    legacyByClient.set(ev.user_id, (legacyByClient.get(ev.user_id) ?? 0) + ms);
+  }
+
+  const rows: TimingRow[] = (users ?? []).map((u: any) => {
+    const m = mazyByClient.get(u.client_uid) ?? {};
+    const intro    = m.mazy_intro_ms ?? 0;
+    const video    = m.mazy_video_ms ?? 0;
+    const lab      = m.mazy_lab_ms ?? 0;
+    const practice = m.mazy_practice_ms ?? 0;
+    const quiz     = m.mazy_quiz_ms ?? 0;
+    const total    = intro + video + lab + practice + quiz;
+    const legacyMs = legacyByClient.get(u.client_uid);
+    return {
+      client_uid: u.client_uid,
+      display_name: (u.display_name as string | null) ?? null,
+      mazy_total_ms: total > 0 ? total : null,
+      mazy_intro_ms: intro,
+      mazy_video_ms: video,
+      mazy_lab_ms: lab,
+      mazy_practice_ms: practice,
+      mazy_quiz_ms: quiz,
+      legacy_total_ms: legacyMs ?? null,
+    };
+  });
+
+  const mazyTotals = rows.map((r) => r.mazy_total_ms).filter((v): v is number => v !== null);
+  const legacyTotals = rows.map((r) => r.legacy_total_ms).filter((v): v is number => v !== null);
+  const meanScreen = (k: keyof TimingRow): number | null => {
+    const vals = rows.filter((r) => r.mazy_total_ms !== null).map((r) => r[k] as number);
+    if (vals.length === 0) return null;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  };
+
+  const summary: TimingSummary = {
+    n_mazy: mazyTotals.length,
+    n_legacy: legacyTotals.length,
+    n_both: rows.filter((r) => r.mazy_total_ms !== null && r.legacy_total_ms !== null).length,
+    mazy_mean_ms: mean(mazyTotals),
+    legacy_mean_ms: mean(legacyTotals),
+    mazy_median_ms: median(mazyTotals),
+    legacy_median_ms: median(legacyTotals),
+    mazy_screens: {
+      intro:    meanScreen('mazy_intro_ms'),
+      video:    meanScreen('mazy_video_ms'),
+      lab:      meanScreen('mazy_lab_ms'),
+      practice: meanScreen('mazy_practice_ms'),
+      quiz:     meanScreen('mazy_quiz_ms'),
+    },
+  };
+
+  return { rows, summary };
+}
+
+/* ============================================================================
    7. SCREEN ANALYTICS — per-surface views / taps / avg time
    ========================================================================= */
 

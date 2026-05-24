@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, ClipboardList, UserCheck, LogOut, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, UserCheck, LogOut, BarChart3, Timer } from 'lucide-react';
 import { signOut as authSignOut } from '@/lib/auth';
 
 const ITEMS = [
   { href: '/',        label: 'Хяналт',              Icon: LayoutDashboard },
   { href: '/survey',  label: 'Санал асуулга',        Icon: ClipboardList },
   { href: '/likert',  label: 'Likert · Mazy vs Legacy', Icon: BarChart3 },
+  { href: '/timing',  label: 'Цагийн харьцуулалт',   Icon: Timer },
   { href: '/leads',   label: 'Холбоо барих',         Icon: UserCheck },
 ];
 
