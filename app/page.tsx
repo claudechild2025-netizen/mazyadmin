@@ -30,19 +30,19 @@ import {
   type LikertMeans,
 } from '@/lib/queries';
 
-const L_LABELS: { key: keyof LikertResponse; label: string; note?: string }[] = [
-  { key: 'l1', label: 'L1 · Ойлгомжтой' },
-  { key: 'l2', label: 'L2 · Мэдээллийн хэмжээ' },
-  { key: 'l3', label: 'L3 · Хичээлийн урт', note: '1=богино, 3=зөв, 5=урт' },
-  { key: 'l4', label: 'L4 · Давтан хэрэглэх' },
-  { key: 'l5', label: 'L5 · Санал болгох' },
-  { key: 'l6', label: 'L6 · Итгэлтэй' },
-  { key: 'l7', label: 'L7 · Ачаалал', note: 'Бага = сайн' },
+const L_LABELS: { key: keyof LikertResponse; tag: string; question: string; note?: string }[] = [
+  { key: 'l1', tag: 'L1', question: 'Хичээлийн агуулга надад ойлгомжтой байлаа.' },
+  { key: 'l2', tag: 'L2', question: 'Дэлгэцийн мэдээллийн хэмжээ тохиромжтой байлаа — хэт олон биш, хэт цөөн биш.' },
+  { key: 'l3', tag: 'L3', question: 'Хичээлийн үргэлжлэх хугацаа надад…', note: '1=хэт богино · 3=зөв · 5=хэт урт' },
+  { key: 'l4', tag: 'L4', question: 'Энэ хичээлийг ирээдүйд дахин үзэх, ашиглах болно.' },
+  { key: 'l5', tag: 'L5', question: 'Энэ сургалтын хэрэгслийг найз, ангийнхандаа санал болгох байсан.' },
+  { key: 'l6', tag: 'L6', question: 'Хичээлийн дараа энэ сэдвийг сайн ойлгосон гэдэгтээ итгэлтэй байна.' },
+  { key: 'l7', tag: 'L7', question: 'Хичээлийн явцад оюун ухаан маань их ачаарсан мэт санагдсан.', note: 'Бага = сайн (когнитив ачаалал)' },
 ];
-const B_LABELS: { key: keyof LikertResponse; label: string }[] = [
-  { key: 'b1', label: 'Б1 · Хамгийн сайн' },
-  { key: 'b2', label: 'Б2 · Сайжруулах' },
-  { key: 'b3', label: 'Б3 · Нэмэлт' },
+const B_LABELS: { key: keyof LikertResponse; tag: string; question: string }[] = [
+  { key: 'b1', tag: 'Б1', question: 'Хичээлд хамгийн их юу таалагдсан бэ?' },
+  { key: 'b2', tag: 'Б2', question: 'Юуг сайжруулбал илүү дээр байх байсан гэж бодож байна?' },
+  { key: 'b3', tag: 'Б3', question: 'Нэмж хэлэхийг хүссэн санал, сэтгэгдэл байвал бичнэ үү.' },
 ];
 
 type Tab = 'overview' | 'participants' | 'survey';
@@ -265,6 +265,16 @@ export default function Dashboard() {
       {tab === 'survey' && (
         <div className="space-y-6">
 
+          {/* ━━━━━━━━━━━━━━━━━━ ШИНЭ АСУУЛГА ━━━━━━━━━━━━━━━━━━ */}
+          <div className="rounded-xl border-2 border-blue-300 bg-blue-50/60 px-4 py-2">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-blue-800">
+              🆕 Шинэ асуулга · Mazy vs Уламжлалт within-subject
+            </h2>
+            <p className="mt-0.5 text-xs text-blue-700">
+              7 Likert (L1–L7) + 3 чөлөөт (B1–B3) · одоогийн судалгааны үндсэн хэрэгсэл
+            </p>
+          </div>
+
           {/* Likert L1–L7 means · Mazy vs Legacy */}
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <h2 className="text-base font-semibold text-slate-900">Likert судалгаа (L1–L7) · Mazy vs Уламжлалт</h2>
@@ -287,11 +297,14 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {L_LABELS.map(({ key, label, note }) => (
-                      <tr key={String(key)} className="hover:bg-slate-50/50">
-                        <td className="px-3 py-2">
-                          <span className="font-medium text-slate-900">{label}</span>
-                          {note && <span className="ml-2 text-[10px] text-slate-400">{note}</span>}
+                    {L_LABELS.map(({ key, tag, question, note }) => (
+                      <tr key={String(key)} className="hover:bg-slate-50/50 align-top">
+                        <td className="px-3 py-2 max-w-md">
+                          <div className="flex items-baseline gap-2">
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">{tag}</span>
+                            <span className="text-slate-900">{question}</span>
+                          </div>
+                          {note && <p className="mt-1 ml-8 text-[10px] text-slate-400">{note}</p>}
                         </td>
                         {likertMeans.map((m) => {
                           const v = m[key as keyof LikertMeans] as number | null;
@@ -310,7 +323,7 @@ export default function Dashboard() {
           </section>
 
           {/* B1–B3 open-ended quotes */}
-          {B_LABELS.map(({ key, label }) => {
+          {B_LABELS.map(({ key, tag, question }) => {
             const quotes = likertRows.filter((r) => {
               const v = r[key];
               return typeof v === 'string' && v.trim().length > 0;
@@ -318,7 +331,10 @@ export default function Dashboard() {
             if (quotes.length === 0) return null;
             return (
               <section key={String(key)} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-                <h2 className="text-base font-semibold text-slate-900">{label}</h2>
+                <div className="flex items-baseline gap-2">
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold text-slate-700">{tag}</span>
+                  <h2 className="text-base font-semibold text-slate-900">{question}</h2>
+                </div>
                 <div className="mt-4 space-y-3">
                   {quotes.map((r) => (
                     <blockquote
@@ -398,20 +414,100 @@ export default function Dashboard() {
             </div>
           </section>
 
-          {/* Old post-session Q1-Q5 means */}
-          <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <h2 className="text-base font-semibold text-slate-900">Хуучин post-session асуулга (Q1–Q5)</h2>
-            <p className="mt-0.5 text-xs text-slate-500">
-              n = {surveyMeans?.n_responses ?? 0} хариу. 4-өөс дээш бол positive feedback.
+          {/* ━━━━━━━━━━━━━━━━━━ ХУУЧИН АСУУЛГА ━━━━━━━━━━━━━━━━━━ */}
+          <div className="rounded-xl border-2 border-slate-300 bg-slate-50 px-4 py-2 mt-10">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+              📜 Хуучин асуулга · Post-session Q1–Q7
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-600">
+              Анх ашиглаж байсан 5 Likert + 1 чөлөөт + 1 зөвшөөрлийн асуулга
             </p>
-            <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-5">
-              <StatCard label="Q1 · Хөдөлгөөнт" value={fmtMean(surveyMeans?.q1_motion_graphic)} hint="1–5" />
-              <StatCard label="Q2 · Цэвэрхэн"   value={fmtMean(surveyMeans?.q2_visual_clarity)} />
-              <StatCard label="Q3 · Навигаци"   value={fmtMean(surveyMeans?.q3_navigation)} />
-              <StatCard label="Q4 · Өнгө"       value={fmtMean(surveyMeans?.q4_color_palette)} />
-              <StatCard label="Q5 · Мазаалай"   value={fmtMean(surveyMeans?.q5_mascot_microlearning)} />
-            </div>
-          </section>
+          </div>
+
+          {/* Өмнөх судалгаа — нэгдсэн үнэлгээ */}
+          {(() => {
+            const q6Count = surveyRows.filter((r) => {
+              const v = (r.answers as Record<string, unknown>).q6_open_feedback;
+              return typeof v === 'string' && v.trim().length > 0;
+            }).length;
+            const q7Yes = surveyRows.filter((r) => {
+              const c = ((r.answers as any).q7_consent ?? {}) as { consent?: string };
+              return c.consent === 'yes';
+            }).length;
+            const q7No = surveyRows.filter((r) => {
+              const c = ((r.answers as any).q7_consent ?? {}) as { consent?: string };
+              return c.consent && c.consent !== 'yes';
+            }).length;
+
+            const QUESTIONS = [
+              { key: 'q1', label: 'Q1 · Хөдөлгөөнт график таалагдсан уу?', mean: surveyMeans?.q1_motion_graphic ?? null },
+              { key: 'q2', label: 'Q2 · Дэлгэц цэвэрхэн харагдсан уу?',    mean: surveyMeans?.q2_visual_clarity ?? null },
+              { key: 'q3', label: 'Q3 · Навигаци ойлгомжтой байсан уу?',   mean: surveyMeans?.q3_navigation ?? null },
+              { key: 'q4', label: 'Q4 · Өнгөний сонголт яаж санагдсан?',   mean: surveyMeans?.q4_color_palette ?? null },
+              { key: 'q5', label: 'Q5 · Мазаалай ба богино хичээл үр дүнтэй?', mean: surveyMeans?.q5_mascot_microlearning ?? null },
+            ];
+
+            return (
+              <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <h2 className="text-base font-semibold text-slate-900">Өмнөх судалгаа · Нэгдсэн үнэлгээ</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Хичээл дууссаны дараах 7 асуултын ерөнхий дүн · n = {surveyMeans?.n_responses ?? 0}
+                </p>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Асуулт</th>
+                        <th className="px-3 py-2 text-right">Дундаж</th>
+                        <th className="px-3 py-2">Тарьц</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {QUESTIONS.map((q) => (
+                        <tr key={q.key} className="hover:bg-slate-50/50">
+                          <td className="px-3 py-2 text-slate-900">{q.label}</td>
+                          <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                            {q.mean !== null ? (
+                              <span className={
+                                q.mean >= 4 ? 'text-emerald-700'
+                                : q.mean >= 3 ? 'text-slate-700'
+                                : 'text-amber-700'
+                              }>{q.mean.toFixed(2)} / 5</span>
+                            ) : <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex h-2 w-32 rounded-full bg-slate-100 overflow-hidden">
+                              <div
+                                className={`h-full ${q.mean !== null && q.mean >= 4 ? 'bg-emerald-400' : q.mean !== null && q.mean >= 3 ? 'bg-slate-400' : 'bg-amber-400'}`}
+                                style={{ width: q.mean ? `${(q.mean / 5) * 100}%` : '0%' }}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="hover:bg-slate-50/50">
+                        <td className="px-3 py-2 text-slate-900">Q6 · Чөлөөт санал</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-700">
+                          {q6Count} хариу
+                        </td>
+                        <td className="px-3 py-2 text-xs text-slate-500">бичсэн оролцогчийн тоо</td>
+                      </tr>
+                      <tr className="hover:bg-slate-50/50">
+                        <td className="px-3 py-2 text-slate-900">Q7 · Дараагийн судалгаанд оролцох</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                          <span className="text-emerald-700">{q7Yes}</span>
+                          <span className="text-slate-400"> / </span>
+                          <span className="text-amber-700">{q7No}</span>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-slate-500">тийм / татгалзсан</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            );
+          })()}
+
 
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <h2 className="text-base font-semibold text-slate-900">Чөлөөт санал (Q6)</h2>
