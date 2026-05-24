@@ -705,6 +705,12 @@ export type TimingRow = {
   mazy_practice_ms: number;
   mazy_quiz_ms: number;
   legacy_total_ms: number | null;
+  legacy_topic1_ms: number;
+  legacy_topic2_ms: number;
+  legacy_topic3_ms: number;
+  legacy_topic4_ms: number;
+  legacy_quiz_ms: number;
+  legacy_complete_ms: number;
 };
 
 export type TimingSummary = {
@@ -722,6 +728,14 @@ export type TimingSummary = {
     practice: number | null;
     quiz: number | null;
   };
+  legacy_screens: {
+    topic1: number | null;
+    topic2: number | null;
+    topic3: number | null;
+    topic4: number | null;
+    quiz: number | null;
+    complete: number | null;
+  };
 };
 
 const median = (xs: number[]): number | null => {
@@ -735,64 +749,79 @@ export async function getTimingComparison(): Promise<{
   rows: TimingRow[];
   summary: TimingSummary;
 }> {
-  const [{ data: users }, { data: views }, { data: legacyEvents }] = await Promise.all([
+  const [{ data: users }, { data: views }] = await Promise.all([
     supabase.from('users').select('client_uid, display_name'),
     supabase.from('screen_views').select('client_uid, screen_slug, time_spent_ms'),
-    supabase.from('events').select('user_id, meta').eq('event', 'legacy_completed'),
   ]);
 
   const bucketOf = (slug: string): keyof TimingRow | null => {
+    // Mazy
     if (slug.startsWith('lesson_intro:'))    return 'mazy_intro_ms';
     if (slug.startsWith('motion_player:'))   return 'mazy_video_ms';
     if (slug.startsWith('lab:') || slug.startsWith('lesson_lab:')) return 'mazy_lab_ms';
     if (slug.startsWith('lesson_practice:')) return 'mazy_practice_ms';
     if (slug.startsWith('quiz:'))            return 'mazy_quiz_ms';
+    // Legacy — useTimeOnScreen with slugs legacy:topic-N / legacy:quiz / legacy:complete
+    if (slug === 'legacy:topic-01') return 'legacy_topic1_ms';
+    if (slug === 'legacy:topic-02') return 'legacy_topic2_ms';
+    if (slug === 'legacy:topic-03') return 'legacy_topic3_ms';
+    if (slug === 'legacy:topic-04') return 'legacy_topic4_ms';
+    if (slug === 'legacy:quiz')     return 'legacy_quiz_ms';
+    if (slug === 'legacy:complete') return 'legacy_complete_ms';
     return null;
   };
 
-  const mazyByClient = new Map<string, Record<string, number>>();
+  const byClient = new Map<string, Record<string, number>>();
   for (const v of (views ?? []) as any[]) {
     const bucket = bucketOf(v.screen_slug);
     if (!bucket) continue;
-    const acc = mazyByClient.get(v.client_uid) ?? {};
+    const acc = byClient.get(v.client_uid) ?? {};
     acc[bucket] = (acc[bucket] ?? 0) + (v.time_spent_ms ?? 0);
-    mazyByClient.set(v.client_uid, acc);
-  }
-
-  const legacyByClient = new Map<string, number>();
-  for (const ev of (legacyEvents ?? []) as any[]) {
-    const ms = Number(ev.meta?.study_ms);
-    if (!Number.isFinite(ms)) continue;
-    // Sum across multiple sessions in case the participant retried
-    legacyByClient.set(ev.user_id, (legacyByClient.get(ev.user_id) ?? 0) + ms);
+    byClient.set(v.client_uid, acc);
   }
 
   const rows: TimingRow[] = (users ?? []).map((u: any) => {
-    const m = mazyByClient.get(u.client_uid) ?? {};
+    const m = byClient.get(u.client_uid) ?? {};
     const intro    = m.mazy_intro_ms ?? 0;
     const video    = m.mazy_video_ms ?? 0;
     const lab      = m.mazy_lab_ms ?? 0;
     const practice = m.mazy_practice_ms ?? 0;
-    const quiz     = m.mazy_quiz_ms ?? 0;
-    const total    = intro + video + lab + practice + quiz;
-    const legacyMs = legacyByClient.get(u.client_uid);
+    const mquiz    = m.mazy_quiz_ms ?? 0;
+    const mazyTotal = intro + video + lab + practice + mquiz;
+
+    const t1 = m.legacy_topic1_ms ?? 0;
+    const t2 = m.legacy_topic2_ms ?? 0;
+    const t3 = m.legacy_topic3_ms ?? 0;
+    const t4 = m.legacy_topic4_ms ?? 0;
+    const lquiz    = m.legacy_quiz_ms ?? 0;
+    const lcomp    = m.legacy_complete_ms ?? 0;
+    const legacyTotal = t1 + t2 + t3 + t4 + lquiz + lcomp;
+
     return {
       client_uid: u.client_uid,
       display_name: (u.display_name as string | null) ?? null,
-      mazy_total_ms: total > 0 ? total : null,
+      mazy_total_ms: mazyTotal > 0 ? mazyTotal : null,
       mazy_intro_ms: intro,
       mazy_video_ms: video,
       mazy_lab_ms: lab,
       mazy_practice_ms: practice,
-      mazy_quiz_ms: quiz,
-      legacy_total_ms: legacyMs ?? null,
+      mazy_quiz_ms: mquiz,
+      legacy_total_ms: legacyTotal > 0 ? legacyTotal : null,
+      legacy_topic1_ms: t1,
+      legacy_topic2_ms: t2,
+      legacy_topic3_ms: t3,
+      legacy_topic4_ms: t4,
+      legacy_quiz_ms: lquiz,
+      legacy_complete_ms: lcomp,
     };
   });
 
   const mazyTotals = rows.map((r) => r.mazy_total_ms).filter((v): v is number => v !== null);
   const legacyTotals = rows.map((r) => r.legacy_total_ms).filter((v): v is number => v !== null);
-  const meanScreen = (k: keyof TimingRow): number | null => {
-    const vals = rows.filter((r) => r.mazy_total_ms !== null).map((r) => r[k] as number);
+  const meanScreen = (k: keyof TimingRow, gate: 'mazy' | 'legacy'): number | null => {
+    const vals = rows
+      .filter((r) => (gate === 'mazy' ? r.mazy_total_ms : r.legacy_total_ms) !== null)
+      .map((r) => r[k] as number);
     if (vals.length === 0) return null;
     return vals.reduce((a, b) => a + b, 0) / vals.length;
   };
@@ -806,16 +835,219 @@ export async function getTimingComparison(): Promise<{
     mazy_median_ms: median(mazyTotals),
     legacy_median_ms: median(legacyTotals),
     mazy_screens: {
-      intro:    meanScreen('mazy_intro_ms'),
-      video:    meanScreen('mazy_video_ms'),
-      lab:      meanScreen('mazy_lab_ms'),
-      practice: meanScreen('mazy_practice_ms'),
-      quiz:     meanScreen('mazy_quiz_ms'),
+      intro:    meanScreen('mazy_intro_ms', 'mazy'),
+      video:    meanScreen('mazy_video_ms', 'mazy'),
+      lab:      meanScreen('mazy_lab_ms', 'mazy'),
+      practice: meanScreen('mazy_practice_ms', 'mazy'),
+      quiz:     meanScreen('mazy_quiz_ms', 'mazy'),
+    },
+    legacy_screens: {
+      topic1:   meanScreen('legacy_topic1_ms', 'legacy'),
+      topic2:   meanScreen('legacy_topic2_ms', 'legacy'),
+      topic3:   meanScreen('legacy_topic3_ms', 'legacy'),
+      topic4:   meanScreen('legacy_topic4_ms', 'legacy'),
+      quiz:     meanScreen('legacy_quiz_ms', 'legacy'),
+      complete: meanScreen('legacy_complete_ms', 'legacy'),
     },
   };
 
   return { rows, summary };
 }
+
+/* ============================================================================
+   12. OVERALL VERDICT — composite Mazy vs Legacy summary
+   ========================================================================= */
+
+export type VerdictMetric = {
+  key: string;
+  label: string;
+  hypothesis: string;       // 'H1' | 'H4' | 'H5' | 'H2' etc.
+  mazy: number | null;
+  legacy: number | null;
+  better: 'mazy' | 'legacy' | 'tie' | 'na';
+  lower_is_better: boolean; // for L7 cognitive load, time-on-task
+  unit: string;
+};
+
+export type VerdictSummary = {
+  metrics: VerdictMetric[];
+  mazyWins: number;
+  legacyWins: number;
+  ties: number;
+  totalCompared: number;
+  perParticipant: {
+    client_uid: string;
+    display_name: string | null;
+    mazyScore: number;       // count of metrics where Mazy better for this user
+    legacyScore: number;
+    decided: 'mazy' | 'legacy' | 'tie';
+  }[];
+};
+
+export async function getOverallVerdict(): Promise<VerdictSummary> {
+  const [means, timing, legacyEvents, mazyAnswers] = await Promise.all([
+    getLikertMeans(),
+    getTimingComparison(),
+    supabase.from('events').select('user_id, meta').eq('event', 'legacy_completed'),
+    supabase.from('quiz_answers').select('client_uid, is_correct, lesson_id'),
+  ]);
+
+  const mazyMean = means.find((m) => m.condition.toLowerCase().includes('mazy'));
+  const legacyMean = means.find((m) => !m.condition.toLowerCase().includes('mazy'));
+
+  // Quiz accuracy per condition
+  const mazyByClient = new Map<string, { correct: number; total: number }>();
+  for (const a of (mazyAnswers.data ?? []) as any[]) {
+    if (a.lesson_id === 'legacy') continue;
+    const prev = mazyByClient.get(a.client_uid) ?? { correct: 0, total: 0 };
+    prev.total += 1;
+    if (a.is_correct) prev.correct += 1;
+    mazyByClient.set(a.client_uid, prev);
+  }
+  const legacyQuizByClient = new Map<string, { score: number; total: number }>();
+  for (const ev of (legacyEvents.data ?? []) as any[]) {
+    const score = Number(ev.meta?.quiz_score);
+    const total = Number(ev.meta?.quiz_total);
+    if (!Number.isFinite(score) || !Number.isFinite(total) || total === 0) continue;
+    legacyQuizByClient.set(ev.user_id, { score, total });
+  }
+  const mazyAccuracies = Array.from(mazyByClient.values())
+    .filter((q) => q.total > 0)
+    .map((q) => q.correct / q.total);
+  const legacyAccuracies = Array.from(legacyQuizByClient.values())
+    .map((q) => q.score / q.total);
+
+  const decide = (
+    mazy: number | null,
+    legacy: number | null,
+    lowerIsBetter: boolean,
+  ): VerdictMetric['better'] => {
+    if (mazy === null || legacy === null) return 'na';
+    if (Math.abs(mazy - legacy) < 1e-9) return 'tie';
+    const mazyBetter = lowerIsBetter ? mazy < legacy : mazy > legacy;
+    return mazyBetter ? 'mazy' : 'legacy';
+  };
+
+  const metrics: VerdictMetric[] = [
+    // H4 — satisfaction (L1-L6 higher is better)
+    ...(['l1', 'l2', 'l3', 'l4', 'l5', 'l6'] as const).map((k, i) => ({
+      key: k.toUpperCase(),
+      label: `L${i + 1} · ${L_LABELS[i]}`,
+      hypothesis: 'H4',
+      mazy: (mazyMean?.[k] as number | null) ?? null,
+      legacy: (legacyMean?.[k] as number | null) ?? null,
+      better: decide(mazyMean?.[k] ?? null, legacyMean?.[k] ?? null, false),
+      lower_is_better: false,
+      unit: '/5',
+    })),
+    // H5 — cognitive load (L7 lower is better)
+    {
+      key: 'L7',
+      label: 'L7 · Танин мэдэхүйн ачаалал',
+      hypothesis: 'H5',
+      mazy: mazyMean?.l7 ?? null,
+      legacy: legacyMean?.l7 ?? null,
+      better: decide(mazyMean?.l7 ?? null, legacyMean?.l7 ?? null, true),
+      lower_is_better: true,
+      unit: '/5',
+    },
+    // H1 — usability: quiz accuracy (higher better), time (lower better)
+    {
+      key: 'quiz_accuracy',
+      label: 'Quiz нарийвчлал',
+      hypothesis: 'H1',
+      mazy: mean(mazyAccuracies),
+      legacy: mean(legacyAccuracies),
+      better: decide(mean(mazyAccuracies), mean(legacyAccuracies), false),
+      lower_is_better: false,
+      unit: '%',
+    },
+    {
+      key: 'time_on_task',
+      label: 'Дундаж судалгааны хугацаа',
+      hypothesis: 'H1',
+      mazy: timing.summary.mazy_mean_ms,
+      legacy: timing.summary.legacy_mean_ms,
+      better: decide(timing.summary.mazy_mean_ms, timing.summary.legacy_mean_ms, true),
+      lower_is_better: true,
+      unit: 'ms',
+    },
+  ];
+
+  // Per-participant: who "won" overall
+  const userIds = new Set<string>();
+  timing.rows.forEach((r) => userIds.add(r.client_uid));
+  const allLikert = await getLikertResponses();
+  const likertByUser = new Map<string, { mazy?: any; legacy?: any }>();
+  for (const r of allLikert) {
+    const slot = likertByUser.get(r.user_id_client) ?? {};
+    if (r.condition.toLowerCase().includes('mazy')) slot.mazy = r;
+    else slot.legacy = r;
+    likertByUser.set(r.user_id_client, slot);
+    userIds.add(r.user_id_client);
+  }
+
+  const nameByCuid = await getDisplayNameMap(Array.from(userIds));
+
+  const perParticipant = Array.from(userIds).map((cuid) => {
+    const lk = likertByUser.get(cuid) ?? {};
+    const timeRow = timing.rows.find((r) => r.client_uid === cuid);
+    let mazyScore = 0;
+    let legacyScore = 0;
+
+    // Likert L1-L6 (higher better)
+    if (lk.mazy && lk.legacy) {
+      for (const k of ['l1', 'l2', 'l3', 'l4', 'l5', 'l6'] as const) {
+        const m = lk.mazy[k];
+        const l = lk.legacy[k];
+        if (typeof m !== 'number' || typeof l !== 'number') continue;
+        if (m > l) mazyScore++;
+        else if (l > m) legacyScore++;
+      }
+      // L7 (lower better)
+      const m7 = lk.mazy.l7;
+      const l7 = lk.legacy.l7;
+      if (typeof m7 === 'number' && typeof l7 === 'number') {
+        if (m7 < l7) mazyScore++;
+        else if (l7 < m7) legacyScore++;
+      }
+    }
+    // Timing (lower better)
+    if (timeRow?.mazy_total_ms !== null && timeRow?.mazy_total_ms !== undefined &&
+        timeRow?.legacy_total_ms !== null && timeRow?.legacy_total_ms !== undefined) {
+      if (timeRow.mazy_total_ms < timeRow.legacy_total_ms) mazyScore++;
+      else if (timeRow.legacy_total_ms < timeRow.mazy_total_ms) legacyScore++;
+    }
+    return {
+      client_uid: cuid,
+      display_name: nameByCuid.get(cuid) ?? null,
+      mazyScore,
+      legacyScore,
+      decided:
+        mazyScore > legacyScore ? 'mazy' as const :
+        legacyScore > mazyScore ? 'legacy' as const : 'tie' as const,
+    };
+  }).filter((p) => p.mazyScore + p.legacyScore > 0);
+
+  const counted = metrics.filter((m) => m.better === 'mazy' || m.better === 'legacy' || m.better === 'tie');
+  return {
+    metrics,
+    mazyWins: metrics.filter((m) => m.better === 'mazy').length,
+    legacyWins: metrics.filter((m) => m.better === 'legacy').length,
+    ties: metrics.filter((m) => m.better === 'tie').length,
+    totalCompared: counted.length,
+    perParticipant,
+  };
+}
+
+const L_LABELS = [
+  'Ойлгомжтой байдал',
+  'Мэдээллийн хэмжээ',
+  'Хичээлийн урт',
+  'Давтан хэрэглэх',
+  'Санал болгох',
+  'Итгэлтэй байдал',
+];
 
 /* ============================================================================
    7. SCREEN ANALYTICS — per-surface views / taps / avg time

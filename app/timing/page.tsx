@@ -118,9 +118,22 @@ function TimingShell() {
               <ScreenStat label="Дасгал"  ms={summary.mazy_screens.practice} />
               <ScreenStat label="Сорил"   ms={summary.mazy_screens.quiz} />
             </div>
-            <p className="mt-2 text-xs text-slate-400">
-              Уламжлалт горим нь дэлгэц тус бүрийн tracking-гүй (зөвхөн нийт session time бүртгэгддэг).
-            </p>
+          </section>
+        )}
+
+        {/* Legacy per-screen breakdown */}
+        {summary && (
+          <section className="mt-6 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+            <h2 className="text-base font-semibold text-slate-900">Уламжлалт · Дэлгэцийн төрлөөр</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Дундаж зарцуулсан хугацаа · хэрэглэгч тус бүрд</p>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-6">
+              <ScreenStat label="Бүлэг 1" ms={summary.legacy_screens.topic1} />
+              <ScreenStat label="Бүлэг 2" ms={summary.legacy_screens.topic2} />
+              <ScreenStat label="Бүлэг 3" ms={summary.legacy_screens.topic3} />
+              <ScreenStat label="Бүлэг 4" ms={summary.legacy_screens.topic4} />
+              <ScreenStat label="Сорил"   ms={summary.legacy_screens.quiz} />
+              <ScreenStat label="Дуусгал" ms={summary.legacy_screens.complete} />
+            </div>
           </section>
         )}
 
@@ -154,8 +167,13 @@ function TimingShell() {
                   <th className="px-3 py-3 text-right">Лаб</th>
                   <th className="px-3 py-3 text-right">Дасгал</th>
                   <th className="px-3 py-3 text-right">Сорил</th>
-                  <th className="px-3 py-3 text-right">Уламжлалт нийт</th>
-                  <th className="px-3 py-3 text-right">Δ (M−У)</th>
+                  <th className="px-3 py-3 text-right border-l border-slate-200">Уламжлалт нийт</th>
+                  <th className="px-3 py-3 text-right">Б1</th>
+                  <th className="px-3 py-3 text-right">Б2</th>
+                  <th className="px-3 py-3 text-right">Б3</th>
+                  <th className="px-3 py-3 text-right">Б4</th>
+                  <th className="px-3 py-3 text-right">Сорил</th>
+                  <th className="px-3 py-3 text-right border-l border-slate-200">Δ (M−У)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -174,10 +192,15 @@ function TimingShell() {
                       <td className="px-3 py-2 text-right tabular-nums text-slate-500">{fmt(r.mazy_lab_ms || null)}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-500">{fmt(r.mazy_practice_ms || null)}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-500">{fmt(r.mazy_quiz_ms || null)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums font-medium text-amber-700">
+                      <td className="px-3 py-2 text-right tabular-nums font-medium text-amber-700 border-l border-slate-100">
                         {fmt(r.legacy_total_ms)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">{fmt(r.legacy_topic1_ms || null)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">{fmt(r.legacy_topic2_ms || null)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">{fmt(r.legacy_topic3_ms || null)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">{fmt(r.legacy_topic4_ms || null)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">{fmt(r.legacy_quiz_ms || null)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums border-l border-slate-100">
                         {d === null ? <span className="text-slate-400">—</span> : (
                           <span className={d < 0 ? 'text-emerald-600' : 'text-red-600'}>
                             {d > 0 ? '+' : '−'}{fmt(Math.abs(d))}
@@ -189,7 +212,7 @@ function TimingShell() {
                 })}
                 {loaded && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-sm text-slate-500">
+                    <td colSpan={14} className="py-8 text-center text-sm text-slate-500">
                       Тохирох оролцогч алга.
                     </td>
                   </tr>
@@ -254,7 +277,11 @@ function ScreenStat({ label, ms }: { label: string; ms: number | null }) {
 }
 
 function buildCsvHref(rows: TimingRow[]): string {
-  const header = ['client_uid', 'display_name', 'mazy_total_ms', 'mazy_intro_ms', 'mazy_video_ms', 'mazy_lab_ms', 'mazy_practice_ms', 'mazy_quiz_ms', 'legacy_total_ms'];
+  const header = [
+    'client_uid', 'display_name',
+    'mazy_total_ms', 'mazy_intro_ms', 'mazy_video_ms', 'mazy_lab_ms', 'mazy_practice_ms', 'mazy_quiz_ms',
+    'legacy_total_ms', 'legacy_topic1_ms', 'legacy_topic2_ms', 'legacy_topic3_ms', 'legacy_topic4_ms', 'legacy_quiz_ms', 'legacy_complete_ms',
+  ];
   const escape = (v: unknown) => {
     const s = v == null ? '' : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -262,7 +289,11 @@ function buildCsvHref(rows: TimingRow[]): string {
   const lines = [header.join(',')];
   for (const r of rows) {
     lines.push(
-      [r.client_uid, r.display_name, r.mazy_total_ms, r.mazy_intro_ms, r.mazy_video_ms, r.mazy_lab_ms, r.mazy_practice_ms, r.mazy_quiz_ms, r.legacy_total_ms]
+      [
+        r.client_uid, r.display_name,
+        r.mazy_total_ms, r.mazy_intro_ms, r.mazy_video_ms, r.mazy_lab_ms, r.mazy_practice_ms, r.mazy_quiz_ms,
+        r.legacy_total_ms, r.legacy_topic1_ms, r.legacy_topic2_ms, r.legacy_topic3_ms, r.legacy_topic4_ms, r.legacy_quiz_ms, r.legacy_complete_ms,
+      ]
         .map(escape)
         .join(','),
     );
