@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Download, Trash2, Eye } from 'lucide-react';
+import { Download, Trash2 } from 'lucide-react';
 import type { ParticipantRow } from '@/lib/queries';
 import { downloadParticipantsCsv } from '@/lib/csv';
 import { deleteUserAction } from '@/app/actions';
@@ -191,8 +191,12 @@ export function ParticipantTable({ rows }: Props) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {sorted.map((row) => (
-              <tr key={row.id} className={`hover:bg-slate-50 ${selectedIds.has(row.id) ? 'bg-blue-50/40' : ''}`}>
-                <td className="px-3 py-3">
+              <tr
+                key={row.id}
+                onClick={() => setSelectedUserId(row.id)}
+                className={`cursor-pointer hover:bg-slate-50 ${selectedIds.has(row.id) ? 'bg-blue-50/40' : ''}`}
+              >
+                <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     aria-label={`${row.short_id}-г сонгох`}
@@ -275,32 +279,23 @@ export function ParticipantTable({ rows }: Props) {
                     ? `${(row.lab_time_ms / 1000).toFixed(0)} сек`
                     : '—'}
                 </Td>
-                <td className="px-3 py-3 text-right">
-                  <div className="flex items-center justify-end gap-3">
-                    <button
-                      onClick={() => setSelectedUserId(row.id)}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
-                    >
-                      Дэлгэрэнгүй
-                      <Eye size={14} />
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (confirm('Энэ хэрэглэгчийг устгах уу?')) {
-                          try {
-                            await deleteUserAction(row.id);
-                            window.location.reload();
-                          } catch (err: any) {
-                            alert('Алдаа: ' + err.message + '\n(SUPABASE_SERVICE_ROLE_KEY тохируулагдсан эсэхийг шалгана уу)');
-                          }
+                <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={async () => {
+                      if (confirm('Энэ хэрэглэгчийг устгах уу?')) {
+                        try {
+                          await deleteUserAction(row.id);
+                          window.location.reload();
+                        } catch (err: any) {
+                          alert('Алдаа: ' + err.message + '\n(SUPABASE_SERVICE_ROLE_KEY тохируулагдсан эсэхийг шалгана уу)');
                         }
-                      }}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:underline"
-                      title="Устгах"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-red-400 hover:text-red-600"
+                    title="Устгах"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </td>
               </tr>
             ))}
