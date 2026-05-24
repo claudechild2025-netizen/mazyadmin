@@ -4,9 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Download } from 'lucide-react';
 import { AuthGate } from '@/components/AuthGate';
 import { Sidebar } from '@/components/Sidebar';
+import { StatCard } from '@/components/StatCard';
 import {
   getSurveyResponses,
+  getSurveyMeans,
   type SurveyResponse,
+  type SurveyMeans,
 } from '@/lib/queries';
 
 /*
@@ -23,14 +26,21 @@ export default function SurveyPage() {
 
 function SurveyShell() {
   const [rows, setRows] = useState<SurveyResponse[]>([]);
+  const [means, setMeans] = useState<SurveyMeans | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    getSurveyResponses()
-      .then((r) => setRows(r))
+    Promise.all([getSurveyResponses(), getSurveyMeans().catch(() => null)])
+      .then(([r, m]) => {
+        setRows(r);
+        setMeans(m);
+      })
       .catch(() => setRows([]))
       .finally(() => setLoaded(true));
   }, []);
+
+  const fmtMean = (v: number | null | undefined) =>
+    v == null ? '—' : Number(v).toFixed(1);
 
   const csvHref = useMemo(() => buildCsvHref(rows), [rows]);
 
@@ -54,6 +64,21 @@ function SurveyShell() {
             CSV татах
           </a>
         </header>
+
+        {/* Likert means Q1–Q5 */}
+        <section className="mt-6 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+          <h2 className="text-base font-semibold text-slate-900">Likert дундаж (1–5)</h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            n = {means?.n_responses ?? 0} хариу. 4-өөс дээш бол positive feedback.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-5">
+            <StatCard label="Q1 · Хөдөлгөөнт" value={fmtMean(means?.q1_motion_graphic)} hint="1–5" />
+            <StatCard label="Q2 · Цэвэрхэн"   value={fmtMean(means?.q2_visual_clarity)} />
+            <StatCard label="Q3 · Навигаци"   value={fmtMean(means?.q3_navigation)} />
+            <StatCard label="Q4 · Өнгө"       value={fmtMean(means?.q4_color_palette)} />
+            <StatCard label="Q5 · Мазаалай"   value={fmtMean(means?.q5_mascot_microlearning)} />
+          </div>
+        </section>
 
         <section className="mt-6 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-base font-semibold text-slate-900">

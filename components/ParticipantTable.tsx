@@ -26,6 +26,8 @@ export function ParticipantTable({ rows }: Props) {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [legacyFilter, setLegacyFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const filtered = useMemo(() => {
     if (legacyFilter === 'yes') return rows.filter((r) => r.has_legacy);
@@ -57,6 +59,45 @@ export function ParticipantTable({ rows }: Props) {
     }
   };
 
+  const toggleRow = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const visibleIds = sorted.map((r) => r.id);
+  const allVisibleChecked = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const toggleAllVisible = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleChecked) visibleIds.forEach((id) => next.delete(id));
+      else visibleIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const bulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`${selectedIds.size} хэрэглэгчийг устгах уу?`)) return;
+    setBulkDeleting(true);
+    const ids = Array.from(selectedIds);
+    const errors: string[] = [];
+    for (const id of ids) {
+      try {
+        await deleteUserAction(id);
+      } catch (err: any) {
+        errors.push(`${id}: ${err.message ?? String(err)}`);
+      }
+    }
+    setBulkDeleting(false);
+    if (errors.length > 0) {
+      alert(`Зарим устгал амжилтгүй боллоо:\n${errors.join('\n')}`);
+    }
+    window.location.reload();
+  };
+
   return (
     <div className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
       <div className="flex items-center justify-between p-5 pb-4">
@@ -70,6 +111,16 @@ export function ParticipantTable({ rows }: Props) {
         </div>
 
         <div className="flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <button
+              onClick={bulkDelete}
+              disabled={bulkDeleting}
+              className="flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+            >
+              <Trash2 size={16} />
+              {bulkDeleting ? 'Устгаж байна…' : `Устгах (${selectedIds.size})`}
+            </button>
+          )}
           <div className="flex rounded-lg ring-1 ring-slate-200 overflow-hidden text-xs font-medium">
             {(['all', 'yes', 'no'] as const).map((v) => (
               <button
@@ -99,6 +150,15 @@ export function ParticipantTable({ rows }: Props) {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
             <tr>
+              <th className="px-3 py-3 w-10">
+                <input
+                  type="checkbox"
+                  aria-label="Бүгдийг сонгох"
+                  checked={allVisibleChecked}
+                  onChange={toggleAllVisible}
+                  className="h-4 w-4 cursor-pointer rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                />
+              </th>
               <Th onClick={() => toggleSort('short_id')} active={sortKey === 'short_id'}>
                 Нэр
               </Th>
@@ -131,7 +191,16 @@ export function ParticipantTable({ rows }: Props) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {sorted.map((row) => (
-              <tr key={row.id} className="hover:bg-slate-50">
+              <tr key={row.id} className={`hover:bg-slate-50 ${selectedIds.has(row.id) ? 'bg-blue-50/40' : ''}`}>
+                <td className="px-3 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label={`${row.short_id}-г сонгох`}
+                    checked={selectedIds.has(row.id)}
+                    onChange={() => toggleRow(row.id)}
+                    className="h-4 w-4 cursor-pointer rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                  />
+                </td>
                 <Td>
                   <span className="font-medium text-slate-900">
                     {row.short_id}
@@ -237,7 +306,7 @@ export function ParticipantTable({ rows }: Props) {
             ))}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-12 text-center text-sm text-slate-500">
+                <td colSpan={11} className="py-12 text-center text-sm text-slate-500">
                   Одоохондоо оролцогч байхгүй байна.
                 </td>
               </tr>

@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { Users, CheckCircle2, Activity, Timer, FlaskConical } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { CompletionFunnel } from '@/components/CompletionFunnel';
-import { ParticipantTable } from '@/components/ParticipantTable';
 import { ScreenAnalyticsTable } from '@/components/ScreenAnalyticsTable';
 import {
   getTotalParticipants,
@@ -13,20 +12,10 @@ import {
   getMeanQuizAnswerTimeMs,
   getMeanLabTimeMs,
   getCompletionFunnel,
-  getParticipants,
-  getSurveyResponses,
-  getSurveyMeans,
-  getConsentLeads,
   getScreenAnalytics,
-  getLessonFunnel,
   getPracticeDrillSummary,
   type FunnelStep,
-  type ParticipantRow,
-  type SurveyResponse,
-  type SurveyMeans,
-  type ConsentLead,
   type ScreenAnalyticRow,
-  type LessonFunnelRow,
   type PracticeDrillRow,
 } from '@/lib/queries';
 
@@ -48,40 +37,25 @@ export default function Dashboard() {
     labMs: number | null;
   } | null>(null);
   const [funnel, setFunnel] = useState<FunnelStep[]>([]);
-  const [rows, setRows] = useState<ParticipantRow[]>([]);
-  const [surveyMeans, setSurveyMeans] = useState<SurveyMeans | null>(null);
-  const [surveyResponses, setSurveyResponses] = useState<SurveyResponse[]>([]);
-  const [consentLeads, setConsentLeads] = useState<ConsentLead[]>([]);
   const [screenAnalytics, setScreenAnalytics] = useState<ScreenAnalyticRow[]>([]);
-  const [lessonFunnel, setLessonFunnel] = useState<LessonFunnelRow[]>([]);
   const [practiceDrills, setPracticeDrills] = useState<PracticeDrillRow[]>([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const [total, completed, sus, quizMs, labMs, funnel, rows, means, sResp, leads, sAnalytics, lFunnel, pDrills] = await Promise.all([
+        const [total, completed, sus, quizMs, labMs, funnel, sAnalytics, pDrills] = await Promise.all([
           getTotalParticipants(),
           getCompletedLessons(),
           getMeanSusScore(),
           getMeanQuizAnswerTimeMs(),
           getMeanLabTimeMs(),
           getCompletionFunnel(),
-          getParticipants(),
-          getSurveyMeans().catch(() => null),
-          getSurveyResponses().catch(() => []),
-          getConsentLeads().catch(() => []),
           getScreenAnalytics().catch(() => []),
-          getLessonFunnel().catch(() => []),
           getPracticeDrillSummary().catch(() => []),
         ]);
         setStats({ total, completed, sus, quizMs, labMs });
         setFunnel(funnel);
-        setRows(rows);
-        setSurveyMeans(means);
-        setSurveyResponses(sResp);
-        setConsentLeads(leads);
         setScreenAnalytics(sAnalytics);
-        setLessonFunnel(lFunnel);
         setPracticeDrills(pDrills);
       } catch (err: any) {
         setError(err.message ?? String(err));
@@ -179,53 +153,8 @@ export default function Dashboard() {
       {/* Funnel chart */}
       <CompletionFunnel data={funnel} />
 
-      {/* Screen Analytics Table */}
+      {/* Screen Analytics Table — categorized into Mazy / Уламжлалт / Үндсэн */}
       <ScreenAnalyticsTable rows={screenAnalytics} />
-
-      {/* Participant table */}
-      <ParticipantTable rows={rows} />
-
-      {/* v5 — Per-lesson 4-phase funnel */}
-      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <h2 className="text-base font-semibold text-slate-900">
-          Хичээл бүрийн фазын дамжилт
-        </h2>
-        <p className="mt-0.5 text-xs text-slate-500">
-          Phase 1 Lab → Phase 2 Distill → Phase 3 Practice → Phase 4 Quiz. Тоо нь
-          тухайн фазад хүрсэн distinct хэрэглэгчийн тоо.
-        </p>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3 text-left">Хичээл</th>
-                <th className="px-4 py-3 text-right">Лаб</th>
-                <th className="px-4 py-3 text-right">Хураангуй</th>
-                <th className="px-4 py-3 text-right">Дасгал</th>
-                <th className="px-4 py-3 text-right">Сорилт</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {lessonFunnel.map((r) => (
-                <tr key={r.lesson_id} className="hover:bg-slate-50/50">
-                  <td className="px-4 py-3 font-mono text-xs">{r.lesson_id}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{r.lab_reached}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{r.distill_reached}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{r.practice_reached}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{r.quiz_reached}</td>
-                </tr>
-              ))}
-              {lessonFunnel.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-slate-500">
-                    Одоохондоо өгөгдөл байхгүй.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
       {/* v5 — Practice drill summary */}
       <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
@@ -274,95 +203,6 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* v3 Survey — per-question Likert means */}
-      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <h2 className="text-base font-semibold text-slate-900">
-          Санал асуулга · Likert дундаж (1–5)
-        </h2>
-        <p className="mt-0.5 text-xs text-slate-500">
-          n = {surveyMeans?.n_responses ?? 0} хариу. 4-өөс дээш бол positive feedback.
-        </p>
-        <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-5">
-          <StatCard label="Q1 · Хөдөлгөөнт" value={fmtMean(surveyMeans?.q1_motion_graphic)} hint="1–5" />
-          <StatCard label="Q2 · Цэвэрхэн"   value={fmtMean(surveyMeans?.q2_visual_clarity)} />
-          <StatCard label="Q3 · Навигаци"   value={fmtMean(surveyMeans?.q3_navigation)} />
-          <StatCard label="Q4 · Өнгө"       value={fmtMean(surveyMeans?.q4_color_palette)} />
-          <StatCard label="Q5 · Мазаалай"   value={fmtMean(surveyMeans?.q5_mascot_microlearning)} />
-        </div>
-      </section>
-
-      {/* Open-ended Q6 quotes */}
-      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <h2 className="text-base font-semibold text-slate-900">
-          Чөлөөт санал хүсэлт (Q6)
-        </h2>
-        <div className="mt-4 space-y-3">
-          {surveyResponses
-            .filter((r) => {
-              const v = (r.answers as Record<string, unknown>).q6_open_feedback;
-              return typeof v === 'string' && v.trim().length > 0;
-            })
-            .map((r) => (
-              <blockquote
-                key={r.id}
-                className="rounded-lg border-l-4 border-blue-500 bg-blue-50 px-4 py-3 text-sm"
-              >
-                &ldquo;{String((r.answers as Record<string, unknown>).q6_open_feedback)}&rdquo;
-                <footer className="mt-2 text-xs text-slate-500">
-                  <span className="font-medium text-slate-700">
-                    {r.display_name || r.user_id_client.slice(0, 8)}
-                  </span>
-                  {' · '}
-                  {new Date(r.submitted_at).toLocaleString('mn-MN')}
-                </footer>
-              </blockquote>
-            ))}
-          {surveyResponses.length === 0 && (
-            <p className="text-sm text-slate-500">Одоогоор хариу алга.</p>
-          )}
-        </div>
-      </section>
-
-      {/* Q7 Consent leads */}
-      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <h2 className="text-base font-semibold text-slate-900">
-          Дараагийн судалгаанд оролцох (Q7)
-        </h2>
-        <div className="mt-4 overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="text-xs uppercase text-slate-500">
-              <tr>
-                <th className="py-2 text-left">Нэр</th>
-                <th className="text-left">Холбоо барих</th>
-                <th className="text-left">Огноо</th>
-              </tr>
-            </thead>
-            <tbody>
-              {consentLeads.map((c) => (
-                <tr key={c.uid + c.submitted_at} className="border-t border-slate-100">
-                  <td className="py-2">
-                    <span className="font-medium text-slate-900">
-                      {c.display_name || c.uid.slice(0, 8)}
-                    </span>
-                  </td>
-                  <td>{c.contact}</td>
-                  <td className="text-slate-500">
-                    {new Date(c.submitted_at).toLocaleString('mn-MN')}
-                  </td>
-                </tr>
-              ))}
-              {consentLeads.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="py-6 text-center text-slate-500">
-                    Зөвшөөрсөн оролцогч одоогоор алга.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="pt-4 text-center text-xs text-slate-500">
         Mazy Admin · Read-only · Дипломын ажил 2026
@@ -371,7 +211,3 @@ export default function Dashboard() {
   );
 }
 
-function fmtMean(v: number | null | undefined): string {
-  if (v == null) return '—';
-  return Number(v).toFixed(1);
-}
