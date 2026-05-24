@@ -676,6 +676,20 @@ export async function uploadObservationEvents(
   return { inserted: count ?? events.length };
 }
 
+export async function deleteObservationEvent(
+  participant_id: string,
+  condition: string,
+  event_id: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('observation_events')
+    .delete()
+    .eq('participant_id', participant_id)
+    .eq('condition', condition)
+    .eq('event_id', event_id);
+  if (error) throw error;
+}
+
 /** Look up display_name for a list of client_uids in one round-trip. */
 async function getDisplayNameMap(cuids: string[]): Promise<Map<string, string>> {
   if (cuids.length === 0) return new Map();

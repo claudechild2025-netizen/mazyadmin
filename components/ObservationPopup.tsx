@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Play, Pause, Trash2, Download, FileJson, CloudUpload } from 'lucide-react';
-import { uploadObservationEvents } from '@/lib/queries';
+import { uploadObservationEvents, deleteObservationEvent } from '@/lib/queries';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -200,6 +200,22 @@ export function ObservationPopup({
     };
     setSession(updated);
     persist(updated);
+    // Push to Supabase immediately (fire-and-forget; LocalStorage holds fallback)
+    uploadObservationEvents([{
+      event_id: ev.id,
+      participant_id: updated.participant_id,
+      condition: updated.condition,
+      session_time: ev.session_time,
+      timestamp: ev.timestamp,
+      event_type: ev.event_type,
+      screen: ev.screen || null,
+      duration_sec: ev.duration_sec,
+      severity: ev.severity,
+      verbatim: ev.verbatim || null,
+      notes: ev.notes || null,
+    }]).catch((err) => {
+      setSaveStatus(`⚠ Supabase алдаа: ${err.message ?? String(err)}`);
+    });
     // Flash and clear form
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 1200);
@@ -218,6 +234,10 @@ export function ObservationPopup({
     };
     setSession(updated);
     persist(updated);
+    // Mirror delete to Supabase
+    deleteObservationEvent(session.participant_id, session.condition, id).catch((err) => {
+      setSaveStatus(`⚠ Supabase delete алдаа: ${err.message ?? String(err)}`);
+    });
   };
 
   const exportCsv = () => {
