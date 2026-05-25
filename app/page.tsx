@@ -451,57 +451,118 @@ export default function Dashboard() {
               );
             })}
 
-            {/* Хуучин дасгал — practice attempts summary */}
-            <details className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 mt-6" open>
-              <summary className="cursor-pointer text-base font-semibold text-slate-900 select-none">
-                Хуучин дасгал (Phase 3 practice drills)
-                <span className="ml-2 text-xs font-normal text-slate-500">
-                  {practiceDrills.length} drill
-                </span>
-              </summary>
-              <p className="mt-1 text-xs text-slate-500">
-                Хичээл дотор хийсэн ажиглалт/дасгал. Mazy quiz-ээс тусдаа phase.
-              </p>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Хичээл</th>
-                      <th className="px-4 py-3 text-left">Drill</th>
-                      <th className="px-4 py-3 text-left">Төрөл</th>
-                      <th className="px-4 py-3 text-right">Оролдлого</th>
-                      <th className="px-4 py-3 text-right">Дунд. зөв</th>
-                      <th className="px-4 py-3 text-right">Дунд. буруу</th>
-                      <th className="px-4 py-3 text-right">Дунд. хугацаа</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {practiceDrills.map((d, i) => (
-                      <tr key={`${d.lesson_id}:${d.drill_id}:${i}`} className="hover:bg-slate-50/50">
-                        <td className="px-4 py-3 text-slate-700">
-                          {LESSON_NAMES[d.lesson_id] ?? d.lesson_id}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs">{d.drill_id}</td>
-                        <td className="px-4 py-3 text-slate-500">{d.drill_kind ?? '—'}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{d.attempts}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{d.avg_correct.toFixed(1)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-red-600">{d.avg_wrong.toFixed(1)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-slate-500">
-                          {d.avg_duration_ms != null ? `${(d.avg_duration_ms / 1000).toFixed(1)}с` : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                    {practiceDrills.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="py-6 text-center text-sm text-slate-400">
-                          Одоохондоо drill хийгдээгүй.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </details>
+            {/* Хуучин дасгал — practice attempts dashboard */}
+            {(() => {
+              const totalAttempts = practiceDrills.reduce((acc, d) => acc + d.attempts, 0);
+              const totalCorrect = practiceDrills.reduce((acc, d) => acc + d.avg_correct * d.attempts, 0);
+              const totalWrong   = practiceDrills.reduce((acc, d) => acc + d.avg_wrong   * d.attempts, 0);
+              const overallAcc   = totalCorrect + totalWrong > 0
+                ? totalCorrect / (totalCorrect + totalWrong)
+                : 0;
+
+              return (
+                <details className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 mt-6" open>
+                  <summary className="cursor-pointer text-base font-semibold text-slate-900 select-none">
+                    Хуучин дасгал (Phase 3 practice drills)
+                    <span className="ml-2 text-xs font-normal text-slate-500">
+                      {practiceDrills.length} drill
+                    </span>
+                  </summary>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Хичээл дотор хийсэн дасгал. Mazy quiz-ээс тусдаа phase. Нийт оноо нь бүх оролдлогын нийлбэр.
+                  </p>
+
+                  {/* Summary cards */}
+                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                      <p className="text-xs uppercase text-slate-500">Нийт оролдлого</p>
+                      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{totalAttempts}</p>
+                    </div>
+                    <div className="rounded-xl bg-emerald-50 p-4 ring-1 ring-emerald-200">
+                      <p className="text-xs uppercase text-emerald-700">Нийт зөв</p>
+                      <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-800">{Math.round(totalCorrect)}</p>
+                    </div>
+                    <div className="rounded-xl bg-red-50 p-4 ring-1 ring-red-200">
+                      <p className="text-xs uppercase text-red-700">Нийт буруу</p>
+                      <p className="mt-1 text-2xl font-bold tabular-nums text-red-800">{Math.round(totalWrong)}</p>
+                    </div>
+                    <div className={`rounded-xl p-4 ring-1 ${
+                      overallAcc >= 0.7 ? 'bg-emerald-50 ring-emerald-200' :
+                      overallAcc >= 0.4 ? 'bg-amber-50 ring-amber-200' : 'bg-red-50 ring-red-200'
+                    }`}>
+                      <p className="text-xs uppercase text-slate-500">Ерөнхий нарийвчлал</p>
+                      <p className={`mt-1 text-2xl font-bold tabular-nums ${
+                        overallAcc >= 0.7 ? 'text-emerald-800' :
+                        overallAcc >= 0.4 ? 'text-amber-800' : 'text-red-800'
+                      }`}>{Math.round(overallAcc * 100)}%</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3 text-left">Хичээл</th>
+                          <th className="px-4 py-3 text-left">Drill</th>
+                          <th className="px-4 py-3 text-left">Төрөл</th>
+                          <th className="px-4 py-3 text-right">Оролдлого</th>
+                          <th className="px-4 py-3 text-right">Нийт зөв</th>
+                          <th className="px-4 py-3 text-right">Нийт буруу</th>
+                          <th className="px-4 py-3 text-right">Нарийвчлал</th>
+                          <th className="px-4 py-3 text-right">Дунд. хугацаа</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {practiceDrills.map((d, i) => {
+                          const totC = d.avg_correct * d.attempts;
+                          const totW = d.avg_wrong * d.attempts;
+                          const acc = totC + totW > 0 ? totC / (totC + totW) : 0;
+                          return (
+                            <tr key={`${d.lesson_id}:${d.drill_id}:${i}`} className="hover:bg-slate-50/50">
+                              <td className="px-4 py-3 text-slate-700">
+                                {LESSON_NAMES[d.lesson_id] ?? d.lesson_id}
+                              </td>
+                              <td className="px-4 py-3 font-mono text-xs">{d.drill_id}</td>
+                              <td className="px-4 py-3 text-slate-500">{d.drill_kind ?? '—'}</td>
+                              <td className="px-4 py-3 text-right tabular-nums">{d.attempts}</td>
+                              <td className="px-4 py-3 text-right tabular-nums font-medium text-emerald-700">{Math.round(totC)}</td>
+                              <td className="px-4 py-3 text-right tabular-nums font-medium text-red-600">{Math.round(totW)}</td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <span className={`font-semibold tabular-nums ${
+                                    acc >= 0.7 ? 'text-emerald-700' :
+                                    acc >= 0.4 ? 'text-amber-700' : 'text-red-600'
+                                  }`}>{Math.round(acc * 100)}%</span>
+                                  <div className="h-2 w-16 rounded-full bg-slate-100 overflow-hidden">
+                                    <div
+                                      className={
+                                        acc >= 0.7 ? 'h-full bg-emerald-400' :
+                                        acc >= 0.4 ? 'h-full bg-amber-400' : 'h-full bg-red-400'
+                                      }
+                                      style={{ width: `${acc * 100}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right tabular-nums text-slate-500">
+                                {d.avg_duration_ms != null ? `${(d.avg_duration_ms / 1000).toFixed(1)}с` : '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {practiceDrills.length === 0 && (
+                          <tr>
+                            <td colSpan={8} className="py-6 text-center text-sm text-slate-400">
+                              Одоохондоо drill хийгдээгүй.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              );
+            })()}
           </div>
         );
       })()}
