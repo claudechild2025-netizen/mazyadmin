@@ -117,9 +117,32 @@ const B_LABELS: { key: keyof LikertResponse; tag: string; question: string }[] =
 
 type Tab = 'overview' | 'participants' | 'quiz' | 'survey';
 
+const TABS: Tab[] = ['overview', 'participants', 'quiz', 'survey'];
+const isTab = (v: string): v is Tab => (TABS as string[]).includes(v);
+
+function readTabFromHash(): Tab {
+  if (typeof window === 'undefined') return 'overview';
+  const h = window.location.hash.replace(/^#/, '');
+  return isTab(h) ? h : 'overview';
+}
+
 export default function Dashboard() {
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTabState] = useState<Tab>('overview');
   const [surveyTab, setSurveyTab] = useState<'new' | 'old'>('new');
+
+  // Sync tab ↔ URL hash so refresh preserves the active tab
+  useEffect(() => {
+    setTabState(readTabFromHash());
+    const onHash = () => setTabState(readTabFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const setTab = (next: Tab) => {
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `#${next}`);
+    }
+    setTabState(next);
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
