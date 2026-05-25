@@ -167,6 +167,7 @@ export type ParticipantRow = {
   created_at: string;
   completed: boolean;
   has_legacy: boolean;
+  has_mazy: boolean;
   quiz_score: number | null;
   quiz_details: { key: string; correct: boolean }[];
   sus_score: number | null;
@@ -219,11 +220,18 @@ export async function getParticipants(): Promise<ParticipantRow[]> {
 
   const labByClient = new Map<string, number>();
   const doneSet = new Set<string>();
+  const mazySet = new Set<string>();
+  const isMazyScreen = (slug: string) =>
+    slug.startsWith('lesson_') ||
+    slug.startsWith('quiz:')   ||
+    slug.startsWith('lab:')    ||
+    slug.startsWith('motion_player:');
   for (const v of (views ?? []) as any[]) {
     if (isLabSlug(v.screen_slug)) {
       labByClient.set(v.client_uid, (labByClient.get(v.client_uid) ?? 0) + (v.time_spent_ms ?? 0));
     }
     if (v.screen_slug === 'done') doneSet.add(v.client_uid);
+    if (isMazyScreen(v.screen_slug)) mazySet.add(v.client_uid);
   }
 
   return users.map((u: any) => {
@@ -239,6 +247,7 @@ export async function getParticipants(): Promise<ParticipantRow[]> {
       created_at: u.created_at,
       completed: doneSet.has(u.client_uid),
       has_legacy: legacySet.has(u.client_uid),
+      has_mazy: mazySet.has(u.client_uid),
       quiz_score: q ? q.correct : null,
       quiz_details: quizDetailsByClient.get(u.client_uid) ?? [],
       sus_score: sus !== undefined ? Math.round(sus * 10) / 10 : null,

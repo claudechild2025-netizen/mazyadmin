@@ -309,6 +309,41 @@ export default function Dashboard() {
 
           <CompletionFunnel data={funnel} />
 
+          {/* Хэрэглэгчдийн ангилал — Mazy / Уламжлалт / Хоёулаа */}
+          {(() => {
+            const mazyOnly   = participants.filter((p) => p.has_mazy  && !p.has_legacy).length;
+            const legacyOnly = participants.filter((p) => !p.has_mazy && p.has_legacy ).length;
+            const both       = participants.filter((p) => p.has_mazy  && p.has_legacy ).length;
+            const neither    = participants.filter((p) => !p.has_mazy && !p.has_legacy).length;
+
+            return (
+              <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <h2 className="text-base font-semibold text-slate-900">Хэрэглэгчдийн ангилал</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Нийт {participants.length} оролцогчийг screen_views-аас derivable байдлаар Mazy/Уламжлалтаар ангилсан
+                </p>
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl bg-blue-50 p-4 ring-1 ring-blue-200">
+                    <p className="text-xs uppercase tracking-wider text-blue-700">🟦 Зөвхөн Mazy</p>
+                    <p className="mt-1 text-3xl font-bold tabular-nums text-blue-800">{mazyOnly}</p>
+                  </div>
+                  <div className="rounded-xl bg-amber-50 p-4 ring-1 ring-amber-200">
+                    <p className="text-xs uppercase tracking-wider text-amber-700">🟧 Зөвхөн Уламжлалт</p>
+                    <p className="mt-1 text-3xl font-bold tabular-nums text-amber-800">{legacyOnly}</p>
+                  </div>
+                  <div className="rounded-xl bg-emerald-50 p-4 ring-1 ring-emerald-200">
+                    <p className="text-xs uppercase tracking-wider text-emerald-700">✅ Хоёуланг хийсэн</p>
+                    <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-800">{both}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                    <p className="text-xs uppercase tracking-wider text-slate-600">⏳ Эхлээгүй</p>
+                    <p className="mt-1 text-3xl font-bold tabular-nums text-slate-700">{neither}</p>
+                  </div>
+                </div>
+              </section>
+            );
+          })()}
+
           {/* Хуучин Mazy — post-session Q1–Q5 means + SUS recap */}
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <div className="flex items-baseline justify-between flex-wrap gap-2">
