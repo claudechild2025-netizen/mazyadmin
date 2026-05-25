@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, CheckCircle2, Activity, Timer, FlaskConical, Download } from 'lucide-react';
+import { Users, CheckCircle2, Activity, Timer, FlaskConical, Download, Printer } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { CompletionFunnel } from '@/components/CompletionFunnel';
 import { ParticipantTable } from '@/components/ParticipantTable';
@@ -242,23 +242,49 @@ export default function Dashboard() {
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-8">
       {/* Header */}
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between no-print">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Mazy Admin</h1>
           <p className="mt-1 text-sm text-slate-600">
             Тестийн өгөгдлийн самбар · {new Date().toLocaleString('mn-MN')}
           </p>
         </div>
-        <button
-          onClick={() => window.location.reload()}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
-        >
-          ↻ Шинэчлэх
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => downloadAllCsv({
+              participants, surveyRows, likertRows, quizStats, timingRows, screenAnalytics,
+            })}
+            title="Бүх өгөгдлийг ZIP-гүй CSV байдлаар татна"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
+          >
+            <Download size={14} /> CSV (бүгд)
+          </button>
+          <button
+            onClick={() => window.print()}
+            title="Идэвхтэй tab-ыг тайланд зориулж PDF болгож хэвлэнэ"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
+          >
+            <Printer size={14} /> PDF
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
+          >
+            ↻ Шинэчлэх
+          </button>
+        </div>
       </header>
 
+      {/* Print-only title (visible only when printing) */}
+      <div className="hidden print:block">
+        <h1 className="text-2xl font-bold">Mazy Admin · Тайлан</h1>
+        <p className="text-sm text-slate-600">
+          {new Date().toLocaleString('mn-MN')} · Идэвхтэй tab: {tab}
+        </p>
+      </div>
+
       {/* Tab switcher */}
-      <div className="flex gap-1 rounded-xl bg-white p-1 ring-1 ring-slate-200 w-fit">
+      <div className="flex gap-1 rounded-xl bg-white p-1 ring-1 ring-slate-200 w-fit no-print">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -1332,6 +1358,83 @@ function ConditionStatCard({
         </div>
       </div>
     </div>
+  );
+}
+
+function downloadAllCsv(args: {
+  participants: ParticipantRow[];
+  surveyRows: SurveyResponse[];
+  likertRows: LikertResponse[];
+  quizStats: QuizQuestionStat[];
+  timingRows: TimingRow[];
+  screenAnalytics: ScreenAnalyticRow[];
+}) {
+  const escape = (v: unknown) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const downloadFile = (name: string, header: string[], rows: any[][]) => {
+    const lines = [header.join(','), ...rows.map((r) => r.map(escape).join(','))];
+    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  // 1. Participants
+  downloadFile(
+    'mazy_participants.csv',
+    ['id', 'short_id', 'display_name', 'grade', 'knowledge_level', 'created_at', 'completed', 'has_legacy', 'has_mazy', 'quiz_score', 'sus_score', 'lab_time_ms'],
+    args.participants.map((p) => [
+      p.id, p.short_id, p.display_name, p.grade, p.knowledge_level, p.created_at,
+      p.completed, p.has_legacy, p.has_mazy, p.quiz_score, p.sus_score, p.lab_time_ms,
+    ]),
+  );
+
+  // 2. Survey (old Q1-Q7)
+  downloadFile(
+    'mazy_survey_q1q7.csv',
+    ['uid', 'submitted_at', 'q1', 'q2', 'q3', 'q4', 'q5', 'q6_open', 'q7_consent', 'q7_contact'],
+    args.surveyRows.map((r) => {
+      const a = r.answers as Record<string, unknown>;
+      const c = (a.q7_consent ?? {}) as { consent?: string; contact?: string };
+      return [r.user_id_client, r.submitted_at, a.q1_motion_graphic, a.q2_visual_clarity, a.q3_navigation, a.q4_color_palette, a.q5_mascot_microlearning, a.q6_open_feedback, c.consent, c.contact];
+    }),
+  );
+
+  // 3. Likert L1-L7 + B1-B3
+  downloadFile(
+    'mazy_likert.csv',
+    ['participant_id', 'display_name', 'condition', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'B1', 'B2', 'B3', 'submitted_at'],
+    args.likertRows.map((r) => [
+      r.user_id_client, r.display_name, r.condition,
+      r.l1, r.l2, r.l3, r.l4, r.l5, r.l6, r.l7,
+      r.b1, r.b2, r.b3, r.submitted_at,
+    ]),
+  );
+
+  // 4. Quiz per-question
+  downloadFile(
+    'mazy_quiz_questions.csv',
+    ['lesson_id', 'question_key', 'attempts', 'correct', 'wrong', 'accuracy', 'avg_time_ms'],
+    args.quizStats.map((q) => [q.lesson_id, q.question_key, q.attempts, q.correct, q.wrong, q.accuracy.toFixed(3), q.avg_time_ms]),
+  );
+
+  // 5. Timing comparison
+  downloadFile(
+    'mazy_timing.csv',
+    ['client_uid', 'display_name', 'mazy_total_ms', 'mazy_intro_ms', 'mazy_video_ms', 'mazy_lab_ms', 'mazy_practice_ms', 'mazy_quiz_ms', 'legacy_total_ms', 'legacy_topic1_ms', 'legacy_topic2_ms', 'legacy_topic3_ms', 'legacy_topic4_ms', 'legacy_quiz_ms', 'legacy_complete_ms'],
+    args.timingRows.map((r) => [r.client_uid, r.display_name, r.mazy_total_ms, r.mazy_intro_ms, r.mazy_video_ms, r.mazy_lab_ms, r.mazy_practice_ms, r.mazy_quiz_ms, r.legacy_total_ms, r.legacy_topic1_ms, r.legacy_topic2_ms, r.legacy_topic3_ms, r.legacy_topic4_ms, r.legacy_quiz_ms, r.legacy_complete_ms]),
+  );
+
+  // 6. Screen analytics
+  downloadFile(
+    'mazy_screens.csv',
+    ['surface', 'views', 'taps', 'avg_time_ms'],
+    args.screenAnalytics.map((s) => [s.surface, s.views, s.taps, s.avg_time_ms]),
   );
 }
 

@@ -10,3 +10,31 @@
 @utility tabular {
   font-variant-numeric: tabular-nums;
 }
+
+@media print {
+  /* Тайланд хэвлэхэд саатах UI элементүүдийг нуу */
+  .no-print,
+  aside,
+  button {
+    display: none !important;
+  }
+  body, main {
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  /* Card-уудыг хуудсын завсар тасардаггүй болго */
+  section, .rounded-2xl {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* Цэнхэр болон бусад өнгөтэй badge-ийг тод хэвлэх */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* Хэвлэх үед link-уудыг тод болго */
+  a { color: black !important; text-decoration: underline; }
+  /* Tab switcher-ыг тайлбар pill болгож үлдээ */
+  details > summary { list-style: none; }
+}
