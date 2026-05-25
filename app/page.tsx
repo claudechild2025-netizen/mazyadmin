@@ -23,6 +23,7 @@ import {
   getQuizQuestionStats,
   getTimingComparison,
   fetchAllObservationEvents,
+  deleteObservationEvents,
   type TimingRow,
   type ObservationEventUpload,
   type FunnelStep,
@@ -168,6 +169,35 @@ export default function Dashboard() {
   const [quizStats, setQuizStats] = useState<QuizQuestionStat[]>([]);
   const [timingRows, setTimingRows] = useState<TimingRow[]>([]);
   const [observations, setObservations] = useState<ObservationEventUpload[]>([]);
+  const [selectedObs, setSelectedObs] = useState<Set<string>>(new Set());
+  const [obsDeleting, setObsDeleting] = useState(false);
+  const obsKey = (e: ObservationEventUpload) => `${e.participant_id}::${e.condition}::${e.event_id}`;
+  const toggleObs = (k: string) => {
+    setSelectedObs((prev) => {
+      const next = new Set(prev);
+      next.has(k) ? next.delete(k) : next.add(k);
+      return next;
+    });
+  };
+  const bulkDeleteObs = async () => {
+    if (selectedObs.size === 0) return;
+    if (!confirm(`${selectedObs.size} ажиглалтыг устгах уу?`)) return;
+    setObsDeleting(true);
+    const rows = observations
+      .filter((e) => selectedObs.has(obsKey(e)))
+      .map((e) => ({ participant_id: e.participant_id, condition: e.condition, event_id: e.event_id }));
+    const res = await deleteObservationEvents(rows);
+    setObsDeleting(false);
+    if (res.errors.length > 0) {
+      alert(`Зарим устгал амжилтгүй:\n${res.errors.slice(0, 5).join('\n')}`);
+    }
+    // Reload observations
+    try {
+      const fresh = await fetchAllObservationEvents();
+      setObservations(fresh);
+    } catch {}
+    setSelectedObs(new Set());
+  };
 
   useEffect(() => {
     (async () => {
@@ -1001,48 +1031,99 @@ export default function Dashboard() {
 
             {/* All events log */}
             <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-              <h2 className="text-base font-semibold text-slate-900">Бүх ажиглалт · {observations.length} event</h2>
-              <p className="mt-0.5 text-xs text-slate-500">Оролцогчийн detail-аас нэмэгдсэн event бүгд энд жагсагдана.</p>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-50 text-[10px] uppercase text-slate-500">
-                    <tr>
-                      <th className="px-2 py-2 text-left">Оролцогч</th>
-                      <th className="px-2 py-2 text-left">Нөхцөл</th>
-                      <th className="px-2 py-2 text-left">Дэлгэц</th>
-                      <th className="px-2 py-2 text-left">Event</th>
-                      <th className="px-2 py-2 text-right">Sev</th>
-                      <th className="px-2 py-2 text-right">Хугацаа</th>
-                      <th className="px-2 py-2 text-left">Quote / Тэмдэглэл</th>
-                      <th className="px-2 py-2 text-left">Цаг</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {observations.slice(0, 200).map((e, i) => (
-                      <tr key={`${e.event_id}:${i}`} className="hover:bg-slate-50/50">
-                        <td className="px-2 py-1 font-medium text-slate-800">{e.participant_id}</td>
-                        <td className="px-2 py-1">
-                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                            e.condition.toLowerCase().includes('mazy')
-                              ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
-                          }`}>{e.condition}</span>
-                        </td>
-                        <td className="px-2 py-1 text-slate-500">{e.screen ?? '—'}</td>
-                        <td className="px-2 py-1 text-slate-700">{EVENT_LABELS[e.event_type] ?? e.event_type}</td>
-                        <td className="px-2 py-1 text-right tabular-nums">{e.severity ?? '—'}</td>
-                        <td className="px-2 py-1 text-right tabular-nums text-slate-500">{e.duration_sec ?? '—'}с</td>
-                        <td className="px-2 py-1 italic text-slate-700 max-w-xs truncate">
-                          {e.verbatim || e.notes || '—'}
-                        </td>
-                        <td className="px-2 py-1 text-slate-400">{new Date(e.timestamp).toLocaleString('mn-MN')}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {observations.length > 200 && (
-                  <p className="mt-2 text-xs text-slate-400">{observations.length - 200} мөр илүү — CSV-ээр татаарай.</p>
-                )}
-              </div>
+              {(() => {
+                const visible = observations.slice(0, 200);
+                const visibleKeys = visible.map(obsKey);
+                const allVisibleChecked = visibleKeys.length > 0 && visibleKeys.every((k) => selectedObs.has(k));
+                const toggleAllVisible = () => {
+                  setSelectedObs((prev) => {
+                    const next = new Set(prev);
+                    if (allVisibleChecked) visibleKeys.forEach((k) => next.delete(k));
+                    else visibleKeys.forEach((k) => next.add(k));
+                    return next;
+                  });
+                };
+                return (
+                  <>
+                    <div className="flex items-baseline justify-between flex-wrap gap-2">
+                      <div>
+                        <h2 className="text-base font-semibold text-slate-900">Бүх ажиглалт · {observations.length} event</h2>
+                        <p className="mt-0.5 text-xs text-slate-500">Checkbox-оор сонгож олноор устгаж болно.</p>
+                      </div>
+                      {selectedObs.size > 0 && (
+                        <button
+                          onClick={bulkDeleteObs}
+                          disabled={obsDeleting}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+                        >
+                          {obsDeleting ? 'Устгаж байна…' : `Устгах (${selectedObs.size})`}
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead className="bg-slate-50 text-[10px] uppercase text-slate-500">
+                          <tr>
+                            <th className="px-2 py-2 w-8">
+                              <input
+                                type="checkbox"
+                                aria-label="Бүгдийг сонгох"
+                                checked={allVisibleChecked}
+                                onChange={toggleAllVisible}
+                                className="h-3.5 w-3.5 cursor-pointer rounded border-slate-300"
+                              />
+                            </th>
+                            <th className="px-2 py-2 text-left">Оролцогч</th>
+                            <th className="px-2 py-2 text-left">Нөхцөл</th>
+                            <th className="px-2 py-2 text-left">Дэлгэц</th>
+                            <th className="px-2 py-2 text-left">Event</th>
+                            <th className="px-2 py-2 text-right">Sev</th>
+                            <th className="px-2 py-2 text-right">Хугацаа</th>
+                            <th className="px-2 py-2 text-left">Quote / Тэмдэглэл</th>
+                            <th className="px-2 py-2 text-left">Цаг</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {visible.map((e, i) => {
+                            const k = obsKey(e);
+                            const checked = selectedObs.has(k);
+                            return (
+                              <tr key={`${e.event_id}:${i}`} className={`hover:bg-slate-50/50 ${checked ? 'bg-blue-50/40' : ''}`}>
+                                <td className="px-2 py-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleObs(k)}
+                                    className="h-3.5 w-3.5 cursor-pointer rounded border-slate-300"
+                                  />
+                                </td>
+                                <td className="px-2 py-1 font-medium text-slate-800">{e.participant_id}</td>
+                                <td className="px-2 py-1">
+                                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                    e.condition.toLowerCase().includes('mazy')
+                                      ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+                                  }`}>{e.condition}</span>
+                                </td>
+                                <td className="px-2 py-1 text-slate-500">{e.screen ?? '—'}</td>
+                                <td className="px-2 py-1 text-slate-700">{EVENT_LABELS[e.event_type] ?? e.event_type}</td>
+                                <td className="px-2 py-1 text-right tabular-nums">{e.severity ?? '—'}</td>
+                                <td className="px-2 py-1 text-right tabular-nums text-slate-500">{e.duration_sec ?? '—'}с</td>
+                                <td className="px-2 py-1 italic text-slate-700 max-w-xs truncate">
+                                  {e.verbatim || e.notes || '—'}
+                                </td>
+                                <td className="px-2 py-1 text-slate-400">{new Date(e.timestamp).toLocaleString('mn-MN')}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      {observations.length > 200 && (
+                        <p className="mt-2 text-xs text-slate-400">{observations.length - 200} мөр илүү — CSV-ээр татаарай.</p>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </section>
           </div>
         );

@@ -685,6 +685,25 @@ export async function uploadObservationEvents(
   return { inserted: count ?? events.length };
 }
 
+export async function deleteObservationEvents(
+  rows: { participant_id: string; condition: string; event_id: string }[],
+): Promise<{ deleted: number; errors: string[] }> {
+  if (rows.length === 0) return { deleted: 0, errors: [] };
+  const errors: string[] = [];
+  let deleted = 0;
+  for (const r of rows) {
+    const { error } = await supabase
+      .from('observation_events')
+      .delete()
+      .eq('participant_id', r.participant_id)
+      .eq('condition', r.condition)
+      .eq('event_id', r.event_id);
+    if (error) errors.push(`${r.participant_id}/${r.condition}/${r.event_id}: ${error.message}`);
+    else deleted += 1;
+  }
+  return { deleted, errors };
+}
+
 export async function deleteObservationEvent(
   participant_id: string,
   condition: string,
