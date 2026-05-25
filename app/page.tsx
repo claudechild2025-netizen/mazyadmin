@@ -308,6 +308,30 @@ export default function Dashboard() {
           </div>
 
           <CompletionFunnel data={funnel} />
+
+          {/* Хуучин Mazy — post-session Q1–Q5 means + SUS recap */}
+          <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+            <div className="flex items-baseline justify-between flex-wrap gap-2">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">📜 Хуучин Mazy · Post-session дүн</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Хуучин Q1–Q5 Likert + SUS — нийт {surveyMeans?.n_responses ?? 0} хариу
+                </p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                Хуучин асуулга
+              </span>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-6">
+              <StatCard label="SUS оноо"     value={stats!.sus !== null ? stats!.sus : '—'} hint="0–100" />
+              <StatCard label="Q1 Хөдөлгөөнт" value={fmtMean(surveyMeans?.q1_motion_graphic)} hint="/5" />
+              <StatCard label="Q2 Цэвэрхэн"   value={fmtMean(surveyMeans?.q2_visual_clarity)} hint="/5" />
+              <StatCard label="Q3 Навигаци"   value={fmtMean(surveyMeans?.q3_navigation)} hint="/5" />
+              <StatCard label="Q4 Өнгө"       value={fmtMean(surveyMeans?.q4_color_palette)} hint="/5" />
+              <StatCard label="Q5 Мазаалай"   value={fmtMean(surveyMeans?.q5_mascot_microlearning)} hint="/5" />
+            </div>
+          </section>
+
           <ScreenAnalyticsTable rows={screenAnalytics} />
         </div>
       )}
@@ -331,8 +355,42 @@ export default function Dashboard() {
           arr.push(q);
           byLesson.set(k, arr);
         }
+
+        // Mazy vs Уламжлалт aggregate
+        const mazyQs   = quizStats.filter((q) => q.lesson_id !== 'legacy');
+        const legacyQs = quizStats.filter((q) => q.lesson_id === 'legacy');
+        const summarize = (list: QuizQuestionStat[]) => {
+          const att = list.reduce((a, q) => a + q.attempts, 0);
+          const cor = list.reduce((a, q) => a + q.correct, 0);
+          const wro = list.reduce((a, q) => a + q.wrong, 0);
+          return { att, cor, wro, acc: att > 0 ? cor / att : 0, qcount: list.length };
+        };
+        const mz = summarize(mazyQs);
+        const lg = summarize(legacyQs);
+
         return (
           <div className="space-y-6">
+            {/* Aggregate dashboard — Mazy vs Уламжлалт */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <ConditionStatCard
+                title="Mazy"
+                color="blue"
+                qcount={mz.qcount}
+                attempts={mz.att}
+                correct={mz.cor}
+                wrong={mz.wro}
+                accuracy={mz.acc}
+              />
+              <ConditionStatCard
+                title="Уламжлалт"
+                color="amber"
+                qcount={lg.qcount}
+                attempts={lg.att}
+                correct={lg.cor}
+                wrong={lg.wro}
+                accuracy={lg.acc}
+              />
+            </div>
             {Array.from(byLesson.entries()).map(([lessonId, qs]) => {
               const lessonName = lessonId === '_' ? 'Тодорхойгүй' : (LESSON_NAMES[lessonId] ?? lessonId);
               const totalAttempts = qs.reduce((acc, q) => acc + q.attempts, 0);
@@ -946,6 +1004,51 @@ export default function Dashboard() {
 function fmtMean(v: number | null | undefined): string {
   if (v == null) return '—';
   return Number(v).toFixed(1);
+}
+
+function ConditionStatCard({
+  title, color, qcount, attempts, correct, wrong, accuracy,
+}: {
+  title: string;
+  color: 'blue' | 'amber';
+  qcount: number;
+  attempts: number;
+  correct: number;
+  wrong: number;
+  accuracy: number;
+}) {
+  const ring = color === 'blue' ? 'ring-blue-300' : 'ring-amber-300';
+  const bg   = color === 'blue' ? 'bg-blue-50/60' : 'bg-amber-50/60';
+  const titleColor = color === 'blue' ? 'text-blue-800' : 'text-amber-800';
+  return (
+    <div className={`rounded-2xl ${bg} p-5 ring-2 ${ring}`}>
+      <div className="flex items-baseline justify-between">
+        <h3 className={`text-lg font-bold ${titleColor}`}>{title}</h3>
+        <span className="text-xs text-slate-600">{qcount} асуулт</span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-slate-500">Нийт оролдлого</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{attempts}</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wider text-slate-500">Нарийвчлал</p>
+          <p className={`mt-1 text-2xl font-bold tabular-nums ${
+            accuracy >= 0.7 ? 'text-emerald-700' :
+            accuracy >= 0.4 ? 'text-amber-700' : 'text-red-600'
+          }`}>{attempts > 0 ? `${Math.round(accuracy * 100)}%` : '—'}</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wider text-slate-500">Зөв</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-700">{correct}</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wider text-slate-500">Буруу</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-red-600">{wrong}</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function buildSurveyCsv(rows: SurveyResponse[]): string {
