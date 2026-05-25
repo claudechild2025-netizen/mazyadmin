@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Eye, ListChecks, Activity } from 'lucide-react';
+import { X, Eye, ListChecks, Activity, FileText } from 'lucide-react';
+import Link from 'next/link';
 import { StatCard } from '@/components/StatCard';
 import { ObservationPopup } from '@/components/ObservationPopup';
 import { getParticipantDetail } from '@/lib/queries';
@@ -56,12 +57,21 @@ export function ParticipantDialog({
               </p>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-900 rounded-full transition-colors"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/participant/${userId}/report`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+            >
+              <FileText size={14} />
+              Тайлан · PDF
+            </Link>
+            <button
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-900 rounded-full transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
