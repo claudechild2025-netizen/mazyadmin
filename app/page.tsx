@@ -807,6 +807,82 @@ export default function Dashboard() {
           </div>
 
           {surveyTab === 'new' && <>
+          {/* Шинэ асуулга — overall summary dashboard */}
+          {(() => {
+            const mazyMean = likertMeans.find((m) => m.condition.toLowerCase().includes('mazy'));
+            const legacyMean = likertMeans.find((m) => !m.condition.toLowerCase().includes('mazy'));
+            const avgSatisf = (m: typeof mazyMean) => {
+              if (!m) return null;
+              const vals = (['l1', 'l2', 'l3', 'l4', 'l5', 'l6'] as const)
+                .map((k) => m[k] as number | null)
+                .filter((v): v is number => v !== null);
+              return vals.length === 0 ? null : vals.reduce((a, b) => a + b, 0) / vals.length;
+            };
+            const mzAvg = avgSatisf(mazyMean);
+            const lgAvg = avgSatisf(legacyMean);
+            const mzL7 = mazyMean?.l7 ?? null;
+            const lgL7 = legacyMean?.l7 ?? null;
+            const both = new Set<string>();
+            const onlyM = new Set<string>();
+            const onlyL = new Set<string>();
+            const byUser = new Map<string, { m?: true; l?: true }>();
+            for (const r of likertRows) {
+              const slot = byUser.get(r.user_id_client) ?? {};
+              if (r.condition.toLowerCase().includes('mazy')) slot.m = true;
+              else slot.l = true;
+              byUser.set(r.user_id_client, slot);
+            }
+            for (const [uid, slot] of byUser) {
+              if (slot.m && slot.l) both.add(uid);
+              else if (slot.m) onlyM.add(uid);
+              else if (slot.l) onlyL.add(uid);
+            }
+
+            return (
+              <section className="space-y-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <LikertConditionCard
+                    title="Mazy"
+                    color="blue"
+                    n={mazyMean?.n ?? 0}
+                    satisfMean={mzAvg}
+                    loadL7={mzL7}
+                  />
+                  <LikertConditionCard
+                    title="Уламжлалт"
+                    color="amber"
+                    n={legacyMean?.n ?? 0}
+                    satisfMean={lgAvg}
+                    loadL7={lgL7}
+                  />
+                </div>
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                  <p className="text-xs uppercase tracking-wider text-slate-500">
+                    Within-subject — нэг хүн хариулсан
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-3 text-sm">
+                    <span><strong className="text-emerald-700 tabular-nums">{both.size}</strong> · хоёуланг</span>
+                    <span className="text-slate-300">·</span>
+                    <span><strong className="text-blue-700 tabular-nums">{onlyM.size}</strong> · зөвхөн Mazy</span>
+                    <span className="text-slate-300">·</span>
+                    <span><strong className="text-amber-700 tabular-nums">{onlyL.size}</strong> · зөвхөн Уламжлалт</span>
+                    {mzAvg !== null && lgAvg !== null && (
+                      <>
+                        <span className="text-slate-300">·</span>
+                        <span>
+                          Δ сэтгэл ханамж (L1–L6):{' '}
+                          <strong className={mzAvg > lgAvg ? 'text-blue-700' : mzAvg < lgAvg ? 'text-amber-700' : 'text-slate-600'}>
+                            {mzAvg > lgAvg ? '+' : ''}{(mzAvg - lgAvg).toFixed(2)}
+                          </strong>
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </section>
+            );
+          })()}
+
           {/* Likert L1–L7 means · Mazy vs Legacy */}
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <h2 className="text-base font-semibold text-slate-900">Likert судалгаа (L1–L7) · Mazy vs Уламжлалт</h2>
@@ -1155,6 +1231,48 @@ export default function Dashboard() {
 function fmtMean(v: number | null | undefined): string {
   if (v == null) return '—';
   return Number(v).toFixed(1);
+}
+
+function LikertConditionCard({
+  title, color, n, satisfMean, loadL7,
+}: {
+  title: string;
+  color: 'blue' | 'amber';
+  n: number;
+  satisfMean: number | null;
+  loadL7: number | null;
+}) {
+  const ring = color === 'blue' ? 'ring-blue-300' : 'ring-amber-300';
+  const bg   = color === 'blue' ? 'bg-blue-50/60' : 'bg-amber-50/60';
+  const titleColor = color === 'blue' ? 'text-blue-800' : 'text-amber-800';
+  const sBucket = (v: number | null) =>
+    v === null ? 'text-slate-400' : v >= 4 ? 'text-emerald-700' : v >= 3 ? 'text-slate-700' : 'text-red-600';
+  const lBucket = (v: number | null) =>
+    v === null ? 'text-slate-400' : v <= 2.5 ? 'text-emerald-700' : v >= 4 ? 'text-red-600' : 'text-slate-700';
+  return (
+    <div className={`rounded-2xl ${bg} p-5 ring-2 ${ring}`}>
+      <div className="flex items-baseline justify-between">
+        <h3 className={`text-lg font-bold ${titleColor}`}>{title}</h3>
+        <span className="text-xs text-slate-600">n={n}</span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-slate-500">L1–L6 сэтгэл ханамж</p>
+          <p className={`mt-1 text-2xl font-bold tabular-nums ${sBucket(satisfMean)}`}>
+            {satisfMean !== null ? `${satisfMean.toFixed(2)} / 5` : '—'}
+          </p>
+          <p className="mt-0.5 text-[10px] text-slate-400">Өндөр сайн</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wider text-slate-500">L7 ачаалал</p>
+          <p className={`mt-1 text-2xl font-bold tabular-nums ${lBucket(loadL7)}`}>
+            {loadL7 !== null ? `${loadL7.toFixed(2)} / 5` : '—'}
+          </p>
+          <p className="mt-0.5 text-[10px] text-slate-400">Бага сайн ↓</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ConditionStatCard({
