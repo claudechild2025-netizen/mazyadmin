@@ -1378,6 +1378,99 @@ export default function Dashboard() {
           </>}
 
           {surveyTab === 'old' && <>
+          {/* Hero dashboard — Q1-Q5 satisfaction summary */}
+          {(() => {
+            const n = surveyMeans?.n_responses ?? 0;
+            const q1to5 = [
+              surveyMeans?.q1_motion_graphic,
+              surveyMeans?.q2_visual_clarity,
+              surveyMeans?.q3_navigation,
+              surveyMeans?.q4_color_palette,
+              surveyMeans?.q5_mascot_microlearning,
+            ].filter((v): v is number => v !== null && v !== undefined);
+            const overall = q1to5.length === 0 ? null : q1to5.reduce((a, b) => a + b, 0) / q1to5.length;
+            const q7Yes = surveyRows.filter((r) => ((r.answers as any).q7_consent ?? {}).consent === 'yes').length;
+            const q7No  = surveyRows.filter((r) => {
+              const c = ((r.answers as any).q7_consent ?? {}) as { consent?: string };
+              return c.consent && c.consent !== 'yes';
+            }).length;
+            const q6Count = surveyRows.filter((r) => {
+              const v = (r.answers as any).q6_open_feedback;
+              return typeof v === 'string' && v.trim().length > 0;
+            }).length;
+            const consentRate = q7Yes + q7No === 0 ? null : q7Yes / (q7Yes + q7No);
+            const bestQ = [
+              { k: 'Q1', label: 'Хөдөлгөөнт график', v: surveyMeans?.q1_motion_graphic ?? null },
+              { k: 'Q2', label: 'Цэвэрхэн',         v: surveyMeans?.q2_visual_clarity ?? null },
+              { k: 'Q3', label: 'Навигаци',          v: surveyMeans?.q3_navigation ?? null },
+              { k: 'Q4', label: 'Өнгө',              v: surveyMeans?.q4_color_palette ?? null },
+              { k: 'Q5', label: 'Мазаалай',          v: surveyMeans?.q5_mascot_microlearning ?? null },
+            ];
+            const ranked = bestQ.filter((q) => q.v !== null) as { k: string; label: string; v: number }[];
+            const top = ranked.length ? ranked.reduce((a, b) => a.v >= b.v ? a : b) : null;
+            const bottom = ranked.length ? ranked.reduce((a, b) => a.v <= b.v ? a : b) : null;
+
+            return (
+              <section className="space-y-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div className="rounded-2xl bg-slate-50 p-5 ring-2 ring-slate-300">
+                    <p className="text-xs uppercase tracking-wider text-slate-500">Нийт хариу</p>
+                    <p className="mt-2 text-4xl font-bold tabular-nums text-slate-900">{n}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {q6Count} нь чөлөөт санал бичсэн
+                    </p>
+                  </div>
+                  <div className={`rounded-2xl p-5 ring-2 ${
+                    overall === null ? 'bg-slate-50 ring-slate-200' :
+                    overall >= 4 ? 'bg-emerald-50 ring-emerald-300' :
+                    overall >= 3 ? 'bg-amber-50 ring-amber-300' : 'bg-red-50 ring-red-300'
+                  }`}>
+                    <p className="text-xs uppercase tracking-wider text-slate-500">Q1–Q5 ерөнхий ханамж</p>
+                    <p className={`mt-2 text-4xl font-bold tabular-nums ${
+                      overall === null ? 'text-slate-400' :
+                      overall >= 4 ? 'text-emerald-700' :
+                      overall >= 3 ? 'text-amber-700' : 'text-red-600'
+                    }`}>
+                      {overall !== null ? `${overall.toFixed(2)}` : '—'}
+                      <span className="ml-1 text-lg font-normal text-slate-400">/ 5</span>
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {overall !== null && overall >= 4 ? 'Сайн санал' : overall !== null && overall >= 3 ? 'Дунд' : 'Сайжруулах хэрэгтэй'}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-blue-50 p-5 ring-2 ring-blue-200">
+                    <p className="text-xs uppercase tracking-wider text-blue-700">Q7 · Цаашид оролцох</p>
+                    <p className="mt-2 text-4xl font-bold tabular-nums text-blue-800">
+                      {consentRate !== null ? `${Math.round(consentRate * 100)}%` : '—'}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      <strong className="text-emerald-700">{q7Yes}</strong> тийм / <strong className="text-amber-700">{q7No}</strong> үгүй
+                    </p>
+                  </div>
+                </div>
+
+                {top && bottom && top.k !== bottom.k && (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl bg-emerald-50 p-4 ring-1 ring-emerald-200">
+                      <p className="text-xs uppercase tracking-wider text-emerald-700">🏆 Хамгийн өндөр оноо</p>
+                      <p className="mt-1 text-lg font-bold text-emerald-900">
+                        {top.k} · {top.label}
+                      </p>
+                      <p className="mt-0.5 text-sm tabular-nums text-emerald-700">{top.v.toFixed(2)} / 5</p>
+                    </div>
+                    <div className="rounded-xl bg-amber-50 p-4 ring-1 ring-amber-200">
+                      <p className="text-xs uppercase tracking-wider text-amber-700">⚠ Хамгийн доод оноо</p>
+                      <p className="mt-1 text-lg font-bold text-amber-900">
+                        {bottom.k} · {bottom.label}
+                      </p>
+                      <p className="mt-0.5 text-sm tabular-nums text-amber-700">{bottom.v.toFixed(2)} / 5</p>
+                    </div>
+                  </div>
+                )}
+              </section>
+            );
+          })()}
+
           {/* Өмнөх судалгаа — нэгдсэн үнэлгээ */}
           {(() => {
             const q6Count = surveyRows.filter((r) => {
