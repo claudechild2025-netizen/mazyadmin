@@ -21,6 +21,8 @@ import {
   getLikertResponses,
   getLikertMeans,
   getQuizQuestionStats,
+  getTimingComparison,
+  type TimingRow,
   type FunnelStep,
   type ParticipantRow,
   type ScreenAnalyticRow,
@@ -162,11 +164,12 @@ export default function Dashboard() {
   const [likertRows, setLikertRows] = useState<LikertResponse[]>([]);
   const [likertMeans, setLikertMeans] = useState<LikertMeans[]>([]);
   const [quizStats, setQuizStats] = useState<QuizQuestionStat[]>([]);
+  const [timingRows, setTimingRows] = useState<TimingRow[]>([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const [total, completed, sus, quizMs, labMs, fnl, sAnalytics, pDrills, parts, sMeans, sRows, lRows, lMeans, qStats] =
+        const [total, completed, sus, quizMs, labMs, fnl, sAnalytics, pDrills, parts, sMeans, sRows, lRows, lMeans, qStats, timing] =
           await Promise.all([
             getTotalParticipants(),
             getCompletedLessons(),
@@ -182,6 +185,7 @@ export default function Dashboard() {
             getLikertResponses().catch(() => []),
             getLikertMeans().catch(() => []),
             getQuizQuestionStats().catch(() => []),
+            getTimingComparison().catch(() => ({ rows: [] as TimingRow[], summary: null as any })),
           ]);
         setStats({ total, completed, sus, quizMs, labMs });
         setFunnel(fnl);
@@ -193,6 +197,7 @@ export default function Dashboard() {
         setLikertRows(lRows);
         setLikertMeans(lMeans);
         setQuizStats(qStats);
+        setTimingRows(timing.rows);
       } catch (err: any) {
         setError(err.message ?? String(err));
       } finally {
@@ -340,6 +345,84 @@ export default function Dashboard() {
                     <p className="mt-1 text-3xl font-bold tabular-nums text-slate-700">{neither}</p>
                   </div>
                 </div>
+              </section>
+            );
+          })()}
+
+          {/* Танилцах/унших хугацаа — Mazy vs Уламжлалт (quiz-аас бусад) */}
+          {(() => {
+            // Reading = intro + video + lab + practice for Mazy; topic1-4 for Legacy.
+            // Quiz screens excluded.
+            const mazyReads = timingRows
+              .map((r) => r.mazy_intro_ms + r.mazy_video_ms + r.mazy_lab_ms + r.mazy_practice_ms)
+              .filter((v) => v > 0);
+            const legacyReads = timingRows
+              .map((r) => r.legacy_topic1_ms + r.legacy_topic2_ms + r.legacy_topic3_ms + r.legacy_topic4_ms)
+              .filter((v) => v > 0);
+            const mean = (xs: number[]) => xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length;
+            const median = (xs: number[]) => {
+              if (xs.length === 0) return null;
+              const s = [...xs].sort((a, b) => a - b);
+              const m = Math.floor(s.length / 2);
+              return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
+            };
+            const fmtMs = (ms: number | null) => {
+              if (ms === null || ms <= 0) return '—';
+              if (ms < 60_000) return `${(ms / 1000).toFixed(0)}с`;
+              return `${Math.floor(ms / 60_000)}мин ${Math.round((ms % 60_000) / 1000)}с`;
+            };
+            const mzMean = mean(mazyReads);
+            const lgMean = mean(legacyReads);
+            const delta = mzMean !== null && lgMean !== null ? mzMean - lgMean : null;
+
+            return (
+              <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <h2 className="text-base font-semibold text-slate-900">Танилцах · унших хугацаа</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Quiz-аас бусад хичээлийн дэлгэц дээр зарцуулсан хугацаа · Mazy (танилц.+видео+лаб+дасгал) vs Уламжлалт (бүлэг 1–4)
+                </p>
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="rounded-xl bg-blue-50 p-4 ring-1 ring-blue-200">
+                    <div className="flex items-baseline justify-between">
+                      <p className="text-xs font-bold uppercase tracking-wider text-blue-800">🟦 Mazy</p>
+                      <span className="text-xs text-blue-700">n={mazyReads.length}</span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[10px] uppercase text-slate-500">Дундаж</p>
+                        <p className="text-xl font-bold tabular-nums text-blue-800">{fmtMs(mzMean)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase text-slate-500">Медиан</p>
+                        <p className="text-xl font-bold tabular-nums text-blue-800">{fmtMs(median(mazyReads))}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-amber-50 p-4 ring-1 ring-amber-200">
+                    <div className="flex items-baseline justify-between">
+                      <p className="text-xs font-bold uppercase tracking-wider text-amber-800">🟧 Уламжлалт</p>
+                      <span className="text-xs text-amber-700">n={legacyReads.length}</span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[10px] uppercase text-slate-500">Дундаж</p>
+                        <p className="text-xl font-bold tabular-nums text-amber-800">{fmtMs(lgMean)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase text-slate-500">Медиан</p>
+                        <p className="text-xl font-bold tabular-nums text-amber-800">{fmtMs(median(legacyReads))}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {delta !== null && (
+                  <p className="mt-3 text-sm text-slate-700">
+                    Дундаж зөрүү (Mazy − Уламжлалт):{' '}
+                    <span className={`font-bold ${delta < 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                      {delta > 0 ? '+' : '−'}{fmtMs(Math.abs(delta))} {delta < 0 ? 'хурдан' : 'удаан'}
+                    </span>
+                  </p>
+                )}
               </section>
             );
           })()}
