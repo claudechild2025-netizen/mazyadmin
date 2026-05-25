@@ -363,7 +363,18 @@ export default function Dashboard() {
           const att = list.reduce((a, q) => a + q.attempts, 0);
           const cor = list.reduce((a, q) => a + q.correct, 0);
           const wro = list.reduce((a, q) => a + q.wrong, 0);
-          return { att, cor, wro, acc: att > 0 ? cor / att : 0, qcount: list.length };
+          // Total thinking time = sum over each question of (avg × attempts)
+          const totalMs = list.reduce(
+            (a, q) => a + (q.avg_time_ms !== null ? q.avg_time_ms * q.attempts : 0),
+            0,
+          );
+          return {
+            att, cor, wro,
+            acc: att > 0 ? cor / att : 0,
+            qcount: list.length,
+            totalMs,
+            avgMs: att > 0 ? totalMs / att : 0,
+          };
         };
         const mz = summarize(mazyQs);
         const lg = summarize(legacyQs);
@@ -380,6 +391,8 @@ export default function Dashboard() {
                 correct={mz.cor}
                 wrong={mz.wro}
                 accuracy={mz.acc}
+                totalMs={mz.totalMs}
+                avgMs={mz.avgMs}
               />
               <ConditionStatCard
                 title="Уламжлалт"
@@ -389,6 +402,8 @@ export default function Dashboard() {
                 correct={lg.cor}
                 wrong={lg.wro}
                 accuracy={lg.acc}
+                totalMs={lg.totalMs}
+                avgMs={lg.avgMs}
               />
             </div>
             {Array.from(byLesson.entries()).map(([lessonId, qs]) => {
@@ -1007,7 +1022,7 @@ function fmtMean(v: number | null | undefined): string {
 }
 
 function ConditionStatCard({
-  title, color, qcount, attempts, correct, wrong, accuracy,
+  title, color, qcount, attempts, correct, wrong, accuracy, totalMs, avgMs,
 }: {
   title: string;
   color: 'blue' | 'amber';
@@ -1016,10 +1031,17 @@ function ConditionStatCard({
   correct: number;
   wrong: number;
   accuracy: number;
+  totalMs: number;
+  avgMs: number;
 }) {
   const ring = color === 'blue' ? 'ring-blue-300' : 'ring-amber-300';
   const bg   = color === 'blue' ? 'bg-blue-50/60' : 'bg-amber-50/60';
   const titleColor = color === 'blue' ? 'text-blue-800' : 'text-amber-800';
+  const fmtMs = (ms: number) => {
+    if (ms <= 0) return '—';
+    if (ms < 60_000) return `${(ms / 1000).toFixed(1)}с`;
+    return `${Math.floor(ms / 60_000)}мин ${Math.round((ms % 60_000) / 1000)}с`;
+  };
   return (
     <div className={`rounded-2xl ${bg} p-5 ring-2 ${ring}`}>
       <div className="flex items-baseline justify-between">
@@ -1045,6 +1067,14 @@ function ConditionStatCard({
         <div>
           <p className="text-xs uppercase tracking-wider text-slate-500">Буруу</p>
           <p className="mt-1 text-xl font-semibold tabular-nums text-red-600">{wrong}</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wider text-slate-500">Нийт бодсон</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-slate-800">{fmtMs(totalMs)}</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wider text-slate-500">Дунд. бодолт</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-slate-800">{fmtMs(avgMs)}</p>
         </div>
       </div>
     </div>
