@@ -850,85 +850,152 @@ export default function Dashboard() {
         const mzSent = sentimentRatio(mazy);
         const lgSent = sentimentRatio(legacy);
 
+        // Plain-language winner decision
+        let winner: 'mazy' | 'legacy' | 'tie' = 'tie';
+        let winScore = { m: 0, l: 0 };
+        if (meanSevDelta !== null) {
+          if (meanSevDelta < 0) winScore.m += 1; else if (meanSevDelta > 0) winScore.l += 1;
+        }
+        if (mzSent !== null && lgSent !== null) {
+          if (mzSent > lgSent) winScore.m += 1; else if (lgSent > mzSent) winScore.l += 1;
+        }
+        if ((mazy.byType.get('hesitation') ?? 0) < (legacy.byType.get('hesitation') ?? 0)) winScore.m += 1;
+        else if ((legacy.byType.get('hesitation') ?? 0) < (mazy.byType.get('hesitation') ?? 0)) winScore.l += 1;
+        winner = winScore.m > winScore.l ? 'mazy' : winScore.l > winScore.m ? 'legacy' : 'tie';
+
         return (
           <div className="space-y-6">
-            {/* Hero summary */}
+
+            {/* Plain-language explainer */}
+            <section className="rounded-2xl bg-slate-50 p-5 ring-1 ring-slate-200">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-600">📖 Энэ хуудас юу харуулах вэ?</h2>
+              <p className="mt-2 text-sm text-slate-700 leading-relaxed">
+                Судлаач оролцогч бүрийн дэлгэрэнгүйд орж <strong>Ажиглалт</strong> хийсэн бүхий л үйлдлийг энэ дотор цуглуулж,
+                <strong> Mazy</strong> болон <strong>Уламжлалт</strong> хичээлийн аль нь хүүхдэд илүү таалагдсан,
+                бухимдуулсныг харьцуулдаг. Тоо нь бага байх тусам тэр хичээл хүүхдэд хөнгөн.
+              </p>
+            </section>
+
+            {/* Big verdict banner */}
+            <section className={`rounded-2xl p-6 ring-2 ${
+              winner === 'mazy'   ? 'bg-blue-50 ring-blue-300' :
+              winner === 'legacy' ? 'bg-amber-50 ring-amber-300' :
+                                    'bg-slate-50 ring-slate-300'
+            }`}>
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-slate-500">Ерөнхий дүгнэлт</p>
+                  <p className={`mt-1 text-3xl font-extrabold ${
+                    winner === 'mazy'   ? 'text-blue-800' :
+                    winner === 'legacy' ? 'text-amber-800' :
+                                          'text-slate-700'
+                  }`}>
+                    {winner === 'mazy'   ? '🏆 Mazy илүү таалагдсан'
+                      : winner === 'legacy' ? '📖 Уламжлалт илүү таалагдсан'
+                      : '⚖ Хоёул ижил'}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-700">
+                    {observations.length} ажиглалтад тулгуурлан 3 шинж тэмдгээр харьцуулсан:
+                    {' '}<strong className="text-slate-900">Mazy {winScore.m}</strong>
+                    {' '}vs <strong className="text-slate-900">Уламжлалт {winScore.l}</strong>
+                  </p>
+                </div>
+                <div className="text-7xl leading-none">
+                  {winner === 'mazy' ? '🥇' : winner === 'legacy' ? '📚' : '🤝'}
+                </div>
+              </div>
+            </section>
+
+            {/* Two simple comparison cards */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <ObsConditionCard title="🟦 Mazy" color="blue" agg={mazy} eventLabels={EVENT_LABELS} sentiment={mzSent} />
               <ObsConditionCard title="🟧 Уламжлалт" color="amber" agg={legacy} eventLabels={EVENT_LABELS} sentiment={lgSent} />
             </div>
 
-            {/* Findings */}
-            <section className="rounded-2xl bg-emerald-50 p-5 ring-2 ring-emerald-200">
-              <h2 className="text-base font-bold text-emerald-900">Дүгнэлт · Comparative UX Findings</h2>
-              <ul className="mt-3 space-y-2 text-sm text-emerald-900">
-                <li>
-                  <strong>Severity дундаж:</strong>{' '}
-                  Mazy <span className="font-mono">{mazy.meanSev !== null ? mazy.meanSev.toFixed(2) : '—'}</span>{' '}
-                  vs Уламжлалт <span className="font-mono">{legacy.meanSev !== null ? legacy.meanSev.toFixed(2) : '—'}</span>
-                  {meanSevDelta !== null && (
-                    <span className={`ml-2 font-bold ${meanSevDelta < 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                      Δ {meanSevDelta > 0 ? '+' : ''}{meanSevDelta.toFixed(2)} {meanSevDelta < 0 ? '(Mazy сайжруулсан)' : '(Уламжлалт илүү сайн)'}
-                    </span>
-                  )}
-                </li>
-                <li>
-                  <strong>Зан төлвийн дохио:</strong>{' '}
-                  Mazy дээр {mazy.positive}+ / {mazy.frustration}− ·{' '}
-                  Уламжлалт дээр {legacy.positive}+ / {legacy.frustration}−.
-                  {mzSent !== null && lgSent !== null && (
-                    <span className="ml-2">
-                      Эерэг харьцаа: Mazy <strong>{Math.round(mzSent * 100)}%</strong> vs Уламжлалт <strong>{Math.round(lgSent * 100)}%</strong>
-                    </span>
-                  )}
-                </li>
-                <li>
-                  <strong>Танин мэдэхүйн ачаалал:</strong>{' '}
-                  Mazy дээр <strong>{mazy.byType.get('hesitation') ?? 0}</strong> hesitation event,
-                  Уламжлалт дээр <strong>{legacy.byType.get('hesitation') ?? 0}</strong>.
-                  {(mazy.byType.get('hesitation') ?? 0) < (legacy.byType.get('hesitation') ?? 0) && (
-                    <span className="ml-2 font-medium text-emerald-700">Mazy фокус илүү сайн.</span>
-                  )}
-                </li>
-                <li>
-                  <strong>Оролцогчийн хамрах хүрээ:</strong>{' '}
-                  Mazy: {mazy.participants.size} session, Уламжлалт: {legacy.participants.size} session.
-                </li>
-              </ul>
+            {/* Friendly findings */}
+            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <h2 className="text-base font-bold text-slate-900">Гол үр дүн · энгийн үгээр</h2>
+              <div className="mt-3 space-y-3 text-sm">
+                <FindingRow
+                  icon="🤔"
+                  title="Хэн илүү бухимдсан бэ?"
+                  detail={
+                    meanSevDelta === null
+                      ? 'Хангалттай өгөгдөл алга'
+                      : meanSevDelta < 0
+                        ? `Уламжлалт дээр илүү бухимдсан. Mazy дунд. ${mazy.meanSev!.toFixed(2)}/5 · Уламжлалт дунд. ${legacy.meanSev!.toFixed(2)}/5`
+                        : meanSevDelta > 0
+                          ? `Mazy дээр илүү бухимдсан. Mazy дунд. ${mazy.meanSev!.toFixed(2)}/5 · Уламжлалт дунд. ${legacy.meanSev!.toFixed(2)}/5`
+                          : 'Ижил түвшинд'
+                  }
+                  winner={meanSevDelta === null ? 'tie' : meanSevDelta < 0 ? 'mazy' : meanSevDelta > 0 ? 'legacy' : 'tie'}
+                />
+                <FindingRow
+                  icon="😊"
+                  title="Хэн илүү эерэгээр хариулсан бэ?"
+                  detail={
+                    mzSent === null || lgSent === null
+                      ? 'Хангалттай өгөгдөл алга'
+                      : `Mazy: ${Math.round(mzSent * 100)}% эерэг · Уламжлалт: ${Math.round(lgSent * 100)}% эерэг`
+                  }
+                  winner={mzSent === null || lgSent === null ? 'tie' : mzSent > lgSent ? 'mazy' : lgSent > mzSent ? 'legacy' : 'tie'}
+                />
+                <FindingRow
+                  icon="🧠"
+                  title="Хэн дээр илүү ойлгомжтой байсан бэ?"
+                  detail={`Удаашрах удаа: Mazy ${mazy.byType.get('hesitation') ?? 0} · Уламжлалт ${legacy.byType.get('hesitation') ?? 0}. Цөөн нь сайн.`}
+                  winner={
+                    (mazy.byType.get('hesitation') ?? 0) < (legacy.byType.get('hesitation') ?? 0) ? 'mazy' :
+                    (legacy.byType.get('hesitation') ?? 0) < (mazy.byType.get('hesitation') ?? 0) ? 'legacy' : 'tie'
+                  }
+                />
+                <FindingRow
+                  icon="👥"
+                  title="Хэдэн хүний өгөгдөл цуглуулсан бэ?"
+                  detail={`Mazy: ${mazy.participants.size} оролцогч · Уламжлалт: ${legacy.participants.size} оролцогч`}
+                  winner="tie"
+                />
+              </div>
             </section>
 
-            {/* Event type frequency table */}
+            {/* Event type bar chart */}
             <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-              <h2 className="text-base font-semibold text-slate-900">Event төрлийн давтамж</h2>
-              <p className="mt-0.5 text-xs text-slate-500">Categorical Frequency Analysis · Mazy vs Уламжлалт</p>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Event төрөл</th>
-                      <th className="px-3 py-2 text-right">Mazy</th>
-                      <th className="px-3 py-2 text-right">Уламжлалт</th>
-                      <th className="px-3 py-2 text-right">Δ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {Object.entries(EVENT_LABELS).map(([k, lbl]) => {
-                      const m = mazy.byType.get(k) ?? 0;
-                      const l = legacy.byType.get(k) ?? 0;
-                      const d = m - l;
-                      return (
-                        <tr key={k} className="hover:bg-slate-50/50">
-                          <td className="px-3 py-2 text-slate-900">{lbl}</td>
-                          <td className="px-3 py-2 text-right tabular-nums font-medium text-blue-700">{m}</td>
-                          <td className="px-3 py-2 text-right tabular-nums font-medium text-amber-700">{l}</td>
-                          <td className={`px-3 py-2 text-right tabular-nums font-bold ${d === 0 ? 'text-slate-400' : d > 0 ? 'text-blue-700' : 'text-amber-700'}`}>
-                            {d > 0 ? '+' : ''}{d}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <h2 className="text-base font-semibold text-slate-900">Юу яаж тохиолдсон бэ?</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Ажиглалт болгоны төрөл — урт зураас нь олон удаа болсон гэсэн үг
+              </p>
+              <div className="mt-4 space-y-3">
+                {Object.entries(EVENT_LABELS).map(([k, lbl]) => {
+                  const m = mazy.byType.get(k) ?? 0;
+                  const l = legacy.byType.get(k) ?? 0;
+                  const max = Math.max(m, l, 1);
+                  return (
+                    <div key={k}>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-slate-800">{lbl}</span>
+                        <span className="text-slate-400">
+                          Mazy {m} · Уламжлалт {l}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-12 text-[10px] uppercase text-blue-700">Mazy</span>
+                          <div className="flex-1 h-3 rounded-full bg-slate-100 overflow-hidden">
+                            <div className="h-full bg-blue-500" style={{ width: `${(m / max) * 100}%` }} />
+                          </div>
+                          <span className="w-8 text-right text-xs tabular-nums font-medium text-blue-700">{m}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-12 text-[10px] uppercase text-amber-700">Уламж.</span>
+                          <div className="flex-1 h-3 rounded-full bg-slate-100 overflow-hidden">
+                            <div className="h-full bg-amber-500" style={{ width: `${(l / max) * 100}%` }} />
+                          </div>
+                          <span className="w-8 text-right text-xs tabular-nums font-medium text-amber-700">{l}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </section>
 
@@ -1436,6 +1503,33 @@ export default function Dashboard() {
 function fmtMean(v: number | null | undefined): string {
   if (v == null) return '—';
   return Number(v).toFixed(1);
+}
+
+function FindingRow({
+  icon, title, detail, winner,
+}: {
+  icon: string;
+  title: string;
+  detail: string;
+  winner: 'mazy' | 'legacy' | 'tie';
+}) {
+  const badge = winner === 'mazy'
+    ? <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">🏆 Mazy</span>
+    : winner === 'legacy'
+      ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">🏆 Уламжлалт</span>
+      : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">Тэнцсэн</span>;
+  return (
+    <div className="flex items-start gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+      <span className="text-2xl leading-none shrink-0">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-semibold text-slate-900">{title}</p>
+          {badge}
+        </div>
+        <p className="mt-0.5 text-xs text-slate-600">{detail}</p>
+      </div>
+    </div>
+  );
 }
 
 function ObsConditionCard({
