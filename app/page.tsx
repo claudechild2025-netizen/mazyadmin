@@ -22,7 +22,9 @@ import {
   getLikertMeans,
   getQuizQuestionStats,
   getTimingComparison,
+  fetchAllObservationEvents,
   type TimingRow,
+  type ObservationEventUpload,
   type FunnelStep,
   type ParticipantRow,
   type ScreenAnalyticRow,
@@ -117,9 +119,9 @@ const B_LABELS: { key: keyof LikertResponse; tag: string; question: string }[] =
   { key: 'b3', tag: 'Б3', question: 'Нэмж хэлэхийг хүссэн санал, сэтгэгдэл байвал бичнэ үү.' },
 ];
 
-type Tab = 'overview' | 'participants' | 'quiz' | 'survey';
+type Tab = 'overview' | 'participants' | 'quiz' | 'observation' | 'survey';
 
-const TABS: Tab[] = ['overview', 'participants', 'quiz', 'survey'];
+const TABS: Tab[] = ['overview', 'participants', 'quiz', 'observation', 'survey'];
 const isTab = (v: string): v is Tab => (TABS as string[]).includes(v);
 
 function readTabFromHash(): Tab {
@@ -165,11 +167,12 @@ export default function Dashboard() {
   const [likertMeans, setLikertMeans] = useState<LikertMeans[]>([]);
   const [quizStats, setQuizStats] = useState<QuizQuestionStat[]>([]);
   const [timingRows, setTimingRows] = useState<TimingRow[]>([]);
+  const [observations, setObservations] = useState<ObservationEventUpload[]>([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const [total, completed, sus, quizMs, labMs, fnl, sAnalytics, pDrills, parts, sMeans, sRows, lRows, lMeans, qStats, timing] =
+        const [total, completed, sus, quizMs, labMs, fnl, sAnalytics, pDrills, parts, sMeans, sRows, lRows, lMeans, qStats, timing, obsEvents] =
           await Promise.all([
             getTotalParticipants(),
             getCompletedLessons(),
@@ -186,6 +189,7 @@ export default function Dashboard() {
             getLikertMeans().catch(() => []),
             getQuizQuestionStats().catch(() => []),
             getTimingComparison().catch(() => ({ rows: [] as TimingRow[], summary: null as any })),
+            fetchAllObservationEvents().catch(() => [] as ObservationEventUpload[]),
           ]);
         setStats({ total, completed, sus, quizMs, labMs });
         setFunnel(fnl);
@@ -198,6 +202,7 @@ export default function Dashboard() {
         setLikertMeans(lMeans);
         setQuizStats(qStats);
         setTimingRows(timing.rows);
+        setObservations(obsEvents);
       } catch (err: any) {
         setError(err.message ?? String(err));
       } finally {
@@ -236,6 +241,7 @@ export default function Dashboard() {
     { id: 'overview',     label: 'Хяналт' },
     { id: 'participants', label: 'Оролцогчид',   badge: participants.length },
     { id: 'quiz',         label: 'Quiz',          badge: quizStats.length },
+    { id: 'observation',  label: 'Ажиглалт',      badge: observations.length },
     { id: 'survey',       label: 'Санал асуулга', badge: likertRows.length },
   ];
 
@@ -252,7 +258,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => downloadAllCsv({
-              participants, surveyRows, likertRows, quizStats, timingRows, screenAnalytics,
+              participants, surveyRows, likertRows, quizStats, timingRows, screenAnalytics, observations,
             })}
             title="Бүх өгөгдлийг ZIP-гүй CSV байдлаар татна"
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
@@ -802,6 +808,179 @@ export default function Dashboard() {
         );
       })()}
 
+      {/* ─── Observation tab ────────────────────────────────────────────── */}
+      {tab === 'observation' && (() => {
+        if (observations.length === 0) {
+          return (
+            <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-400 shadow-sm ring-1 ring-slate-200">
+              Ажиглалт алга. Оролцогчийн дэлгэрэнгүй → Ажиглалт tab дотор event нэмэхэд энд жагсагдана.
+            </div>
+          );
+        }
+        const EVENT_LABELS: Record<string, string> = {
+          hesitation:  'Танин мэдэхүйн саатал',
+          misclick:    'Буруу даралт',
+          frustration: 'Бухимдлын дохио',
+          positive:    'Эерэг дохио',
+          behavioral:  'Зан төлвийн дохио',
+          vocal:       'Аман дохио',
+        };
+        const FRUSTRATION_TYPES = new Set(['hesitation', 'misclick', 'frustration', 'behavioral']);
+        const POSITIVE_TYPES    = new Set(['positive']);
+
+        const aggregateBy = (filter: (e: ObservationEventUpload) => boolean) => {
+          const list = observations.filter(filter);
+          const severityVals = list.map((e) => e.severity).filter((v): v is number => v !== null && v !== undefined);
+          const meanSev = severityVals.length === 0 ? null : severityVals.reduce((a, b) => a + b, 0) / severityVals.length;
+          const byType = new Map<string, number>();
+          for (const e of list) byType.set(e.event_type, (byType.get(e.event_type) ?? 0) + 1);
+          const frustration = list.filter((e) => FRUSTRATION_TYPES.has(e.event_type)).length;
+          const positive    = list.filter((e) => POSITIVE_TYPES.has(e.event_type)).length;
+          const participants = new Set(list.map((e) => e.participant_id));
+          return { list, meanSev, byType, frustration, positive, participants };
+        };
+
+        const cond = (name: string) => aggregateBy((e) => e.condition.toLowerCase() === name.toLowerCase());
+        const mazy   = cond('Mazy');
+        const legacy = cond('Legacy');
+        const meanSevDelta = mazy.meanSev !== null && legacy.meanSev !== null ? mazy.meanSev - legacy.meanSev : null;
+
+        const sentimentRatio = (a: typeof mazy) =>
+          a.frustration + a.positive === 0 ? null : a.positive / (a.frustration + a.positive);
+        const mzSent = sentimentRatio(mazy);
+        const lgSent = sentimentRatio(legacy);
+
+        return (
+          <div className="space-y-6">
+            {/* Hero summary */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <ObsConditionCard title="🟦 Mazy" color="blue" agg={mazy} eventLabels={EVENT_LABELS} sentiment={mzSent} />
+              <ObsConditionCard title="🟧 Уламжлалт" color="amber" agg={legacy} eventLabels={EVENT_LABELS} sentiment={lgSent} />
+            </div>
+
+            {/* Findings */}
+            <section className="rounded-2xl bg-emerald-50 p-5 ring-2 ring-emerald-200">
+              <h2 className="text-base font-bold text-emerald-900">Дүгнэлт · Comparative UX Findings</h2>
+              <ul className="mt-3 space-y-2 text-sm text-emerald-900">
+                <li>
+                  <strong>Severity дундаж:</strong>{' '}
+                  Mazy <span className="font-mono">{mazy.meanSev !== null ? mazy.meanSev.toFixed(2) : '—'}</span>{' '}
+                  vs Уламжлалт <span className="font-mono">{legacy.meanSev !== null ? legacy.meanSev.toFixed(2) : '—'}</span>
+                  {meanSevDelta !== null && (
+                    <span className={`ml-2 font-bold ${meanSevDelta < 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                      Δ {meanSevDelta > 0 ? '+' : ''}{meanSevDelta.toFixed(2)} {meanSevDelta < 0 ? '(Mazy сайжруулсан)' : '(Уламжлалт илүү сайн)'}
+                    </span>
+                  )}
+                </li>
+                <li>
+                  <strong>Зан төлвийн дохио:</strong>{' '}
+                  Mazy дээр {mazy.positive}+ / {mazy.frustration}− ·{' '}
+                  Уламжлалт дээр {legacy.positive}+ / {legacy.frustration}−.
+                  {mzSent !== null && lgSent !== null && (
+                    <span className="ml-2">
+                      Эерэг харьцаа: Mazy <strong>{Math.round(mzSent * 100)}%</strong> vs Уламжлалт <strong>{Math.round(lgSent * 100)}%</strong>
+                    </span>
+                  )}
+                </li>
+                <li>
+                  <strong>Танин мэдэхүйн ачаалал:</strong>{' '}
+                  Mazy дээр <strong>{mazy.byType.get('hesitation') ?? 0}</strong> hesitation event,
+                  Уламжлалт дээр <strong>{legacy.byType.get('hesitation') ?? 0}</strong>.
+                  {(mazy.byType.get('hesitation') ?? 0) < (legacy.byType.get('hesitation') ?? 0) && (
+                    <span className="ml-2 font-medium text-emerald-700">Mazy фокус илүү сайн.</span>
+                  )}
+                </li>
+                <li>
+                  <strong>Оролцогчийн хамрах хүрээ:</strong>{' '}
+                  Mazy: {mazy.participants.size} session, Уламжлалт: {legacy.participants.size} session.
+                </li>
+              </ul>
+            </section>
+
+            {/* Event type frequency table */}
+            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <h2 className="text-base font-semibold text-slate-900">Event төрлийн давтамж</h2>
+              <p className="mt-0.5 text-xs text-slate-500">Categorical Frequency Analysis · Mazy vs Уламжлалт</p>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Event төрөл</th>
+                      <th className="px-3 py-2 text-right">Mazy</th>
+                      <th className="px-3 py-2 text-right">Уламжлалт</th>
+                      <th className="px-3 py-2 text-right">Δ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {Object.entries(EVENT_LABELS).map(([k, lbl]) => {
+                      const m = mazy.byType.get(k) ?? 0;
+                      const l = legacy.byType.get(k) ?? 0;
+                      const d = m - l;
+                      return (
+                        <tr key={k} className="hover:bg-slate-50/50">
+                          <td className="px-3 py-2 text-slate-900">{lbl}</td>
+                          <td className="px-3 py-2 text-right tabular-nums font-medium text-blue-700">{m}</td>
+                          <td className="px-3 py-2 text-right tabular-nums font-medium text-amber-700">{l}</td>
+                          <td className={`px-3 py-2 text-right tabular-nums font-bold ${d === 0 ? 'text-slate-400' : d > 0 ? 'text-blue-700' : 'text-amber-700'}`}>
+                            {d > 0 ? '+' : ''}{d}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {/* All events log */}
+            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <h2 className="text-base font-semibold text-slate-900">Бүх ажиглалт · {observations.length} event</h2>
+              <p className="mt-0.5 text-xs text-slate-500">Оролцогчийн detail-аас нэмэгдсэн event бүгд энд жагсагдана.</p>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 text-[10px] uppercase text-slate-500">
+                    <tr>
+                      <th className="px-2 py-2 text-left">Оролцогч</th>
+                      <th className="px-2 py-2 text-left">Нөхцөл</th>
+                      <th className="px-2 py-2 text-left">Дэлгэц</th>
+                      <th className="px-2 py-2 text-left">Event</th>
+                      <th className="px-2 py-2 text-right">Sev</th>
+                      <th className="px-2 py-2 text-right">Хугацаа</th>
+                      <th className="px-2 py-2 text-left">Quote / Тэмдэглэл</th>
+                      <th className="px-2 py-2 text-left">Цаг</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {observations.slice(0, 200).map((e, i) => (
+                      <tr key={`${e.event_id}:${i}`} className="hover:bg-slate-50/50">
+                        <td className="px-2 py-1 font-medium text-slate-800">{e.participant_id}</td>
+                        <td className="px-2 py-1">
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                            e.condition.toLowerCase().includes('mazy')
+                              ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+                          }`}>{e.condition}</span>
+                        </td>
+                        <td className="px-2 py-1 text-slate-500">{e.screen ?? '—'}</td>
+                        <td className="px-2 py-1 text-slate-700">{EVENT_LABELS[e.event_type] ?? e.event_type}</td>
+                        <td className="px-2 py-1 text-right tabular-nums">{e.severity ?? '—'}</td>
+                        <td className="px-2 py-1 text-right tabular-nums text-slate-500">{e.duration_sec ?? '—'}с</td>
+                        <td className="px-2 py-1 italic text-slate-700 max-w-xs truncate">
+                          {e.verbatim || e.notes || '—'}
+                        </td>
+                        <td className="px-2 py-1 text-slate-400">{new Date(e.timestamp).toLocaleString('mn-MN')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {observations.length > 200 && (
+                  <p className="mt-2 text-xs text-slate-400">{observations.length - 200} мөр илүү — CSV-ээр татаарай.</p>
+                )}
+              </div>
+            </section>
+          </div>
+        );
+      })()}
+
       {/* ─── Survey tab ─────────────────────────────────────────────────── */}
       {tab === 'survey' && (
         <div className="space-y-6">
@@ -1259,6 +1438,61 @@ function fmtMean(v: number | null | undefined): string {
   return Number(v).toFixed(1);
 }
 
+function ObsConditionCard({
+  title, color, agg, eventLabels, sentiment,
+}: {
+  title: string;
+  color: 'blue' | 'amber';
+  agg: { list: ObservationEventUpload[]; meanSev: number | null; byType: Map<string, number>; frustration: number; positive: number; participants: Set<string> };
+  eventLabels: Record<string, string>;
+  sentiment: number | null;
+}) {
+  const ring = color === 'blue' ? 'ring-blue-300' : 'ring-amber-300';
+  const bg   = color === 'blue' ? 'bg-blue-50/60' : 'bg-amber-50/60';
+  const titleColor = color === 'blue' ? 'text-blue-800' : 'text-amber-800';
+  const sevColor = (v: number | null) =>
+    v === null ? 'text-slate-400' :
+    v <= 2 ? 'text-emerald-700' :
+    v <= 3.5 ? 'text-amber-700' : 'text-red-600';
+  return (
+    <div className={`rounded-2xl ${bg} p-5 ring-2 ${ring}`}>
+      <div className="flex items-baseline justify-between">
+        <h3 className={`text-lg font-bold ${titleColor}`}>{title}</h3>
+        <span className="text-xs text-slate-600">{agg.list.length} event · {agg.participants.size} session</span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-slate-500">Дунд. severity</p>
+          <p className={`mt-1 text-3xl font-bold tabular-nums ${sevColor(agg.meanSev)}`}>
+            {agg.meanSev !== null ? agg.meanSev.toFixed(2) : '—'}
+            <span className="ml-1 text-base font-normal text-slate-400">/ 5</span>
+          </p>
+          <p className="mt-0.5 text-[10px] text-slate-400">Бага сайн ↓</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wider text-slate-500">Эерэг харьцаа</p>
+          <p className={`mt-1 text-3xl font-bold tabular-nums ${
+            sentiment === null ? 'text-slate-400' :
+            sentiment >= 0.6 ? 'text-emerald-700' :
+            sentiment >= 0.3 ? 'text-amber-700' : 'text-red-600'
+          }`}>
+            {sentiment !== null ? `${Math.round(sentiment * 100)}%` : '—'}
+          </p>
+          <p className="mt-0.5 text-[10px] text-slate-400">positive / (positive+frustration)</p>
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-1.5 text-xs">
+        {Object.entries(eventLabels).map(([k, lbl]) => (
+          <div key={k} className="rounded bg-white/80 px-2 py-1 ring-1 ring-slate-200">
+            <p className="text-[9px] uppercase text-slate-500">{lbl}</p>
+            <p className="font-bold tabular-nums text-slate-900">{agg.byType.get(k) ?? 0}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LikertConditionCard({
   title, color, n, satisfMean, loadL7,
 }: {
@@ -1368,6 +1602,7 @@ function downloadAllCsv(args: {
   quizStats: QuizQuestionStat[];
   timingRows: TimingRow[];
   screenAnalytics: ScreenAnalyticRow[];
+  observations: ObservationEventUpload[];
 }) {
   const escape = (v: unknown) => {
     const s = v == null ? '' : String(v);
@@ -1435,6 +1670,13 @@ function downloadAllCsv(args: {
     'mazy_screens.csv',
     ['surface', 'views', 'taps', 'avg_time_ms'],
     args.screenAnalytics.map((s) => [s.surface, s.views, s.taps, s.avg_time_ms]),
+  );
+
+  // 7. Observations (Mazy vs Legacy comparative UX log)
+  downloadFile(
+    'mazy_observations.csv',
+    ['participant_id', 'condition', 'event_id', 'event_type', 'screen', 'severity', 'duration_sec', 'verbatim', 'notes', 'session_time', 'timestamp'],
+    args.observations.map((o) => [o.participant_id, o.condition, o.event_id, o.event_type, o.screen, o.severity, o.duration_sec, o.verbatim, o.notes, o.session_time, o.timestamp]),
   );
 }
 

@@ -699,6 +699,15 @@ export async function deleteObservationEvent(
   if (error) throw error;
 }
 
+export async function fetchAllObservationEvents(): Promise<ObservationEventUpload[]> {
+  const { data, error } = await supabase
+    .from('observation_events')
+    .select('event_id, participant_id, condition, session_time, timestamp, event_type, screen, duration_sec, severity, verbatim, notes')
+    .order('timestamp', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as ObservationEventUpload[];
+}
+
 export async function fetchObservationSession(
   participant_id: string,
   condition: string,
