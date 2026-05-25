@@ -338,21 +338,8 @@ export function ObservationPopup({
         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
     }`;
 
-  const Outer = embedded
-    ? ({ children }: { children: React.ReactNode }) => (
-        <div className="relative w-full bg-white rounded-2xl ring-1 ring-slate-200 flex flex-col overflow-hidden">{children}</div>
-      )
-    : ({ children }: { children: React.ReactNode }) => (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-            {children}
-          </div>
-        </div>
-      );
-
-  return (
-    <Outer>
-
+  const inner = (
+    <>
         {/* ── A. Header (modal only) ────────────────────────────────────── */}
         {!embedded && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
@@ -698,8 +685,22 @@ export function ObservationPopup({
             )}
           </div>
         </div>
+    </>
+  );
 
-    </Outer>
+  if (embedded) {
+    return (
+      <div className="relative w-full bg-white rounded-2xl ring-1 ring-slate-200 flex flex-col overflow-hidden">
+        {inner}
+      </div>
+    );
+  }
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+        {inner}
+      </div>
+    </div>
   );
 }
 
