@@ -783,7 +783,7 @@ export async function getTimingComparison(): Promise<{
   ]);
 
   const bucketOf = (slug: string): keyof TimingRow | null => {
-    // Mazy
+    // Mazy — named buckets (researcher comparison axes)
     if (slug.startsWith('lesson_intro:'))    return 'mazy_intro_ms';
     if (slug.startsWith('motion_player:'))   return 'mazy_video_ms';
     if (slug.startsWith('lab:') || slug.startsWith('lesson_lab:')) return 'mazy_lab_ms';
@@ -799,13 +799,28 @@ export async function getTimingComparison(): Promise<{
     return null;
   };
 
+  // Mazy "catch-all" — anything emitted from a lesson surface that doesn't
+  // map to a named bucket (lesson_distill, lesson_complete, lesson_play, …)
+  // still belongs to the Mazy session, so include it in the total.
+  const isMazySlug = (slug: string) =>
+    slug.startsWith('lesson_') ||
+    slug.startsWith('quiz:')   ||
+    slug.startsWith('lab:')    ||
+    slug.startsWith('motion_player:');
+
   const byClient = new Map<string, Record<string, number>>();
+  const mazyExtraByClient = new Map<string, number>();
   for (const v of (views ?? []) as any[]) {
-    const bucket = bucketOf(v.screen_slug);
-    if (!bucket) continue;
-    const acc = byClient.get(v.client_uid) ?? {};
-    acc[bucket] = (acc[bucket] ?? 0) + (v.time_spent_ms ?? 0);
-    byClient.set(v.client_uid, acc);
+    const slug = v.screen_slug as string;
+    const bucket = bucketOf(slug);
+    if (bucket) {
+      const acc = byClient.get(v.client_uid) ?? {};
+      acc[bucket] = (acc[bucket] ?? 0) + (v.time_spent_ms ?? 0);
+      byClient.set(v.client_uid, acc);
+    } else if (isMazySlug(slug)) {
+      // Unbucketed Mazy time (distill, complete, play, …)
+      mazyExtraByClient.set(v.client_uid, (mazyExtraByClient.get(v.client_uid) ?? 0) + (v.time_spent_ms ?? 0));
+    }
   }
 
   const rows: TimingRow[] = (users ?? []).map((u: any) => {
@@ -815,7 +830,8 @@ export async function getTimingComparison(): Promise<{
     const lab      = m.mazy_lab_ms ?? 0;
     const practice = m.mazy_practice_ms ?? 0;
     const mquiz    = m.mazy_quiz_ms ?? 0;
-    const mazyTotal = intro + video + lab + practice + mquiz;
+    const mazyExtra = mazyExtraByClient.get(u.client_uid) ?? 0;
+    const mazyTotal = intro + video + lab + practice + mquiz + mazyExtra;
 
     const t1 = m.legacy_topic1_ms ?? 0;
     const t2 = m.legacy_topic2_ms ?? 0;
