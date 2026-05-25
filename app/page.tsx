@@ -532,6 +532,16 @@ export default function Dashboard() {
               const overallAcc   = totalCorrect + totalWrong > 0
                 ? totalCorrect / (totalCorrect + totalWrong)
                 : 0;
+              const totalMs = practiceDrills.reduce(
+                (acc, d) => acc + (d.avg_duration_ms !== null ? d.avg_duration_ms * d.attempts : 0),
+                0,
+              );
+              const avgMs = totalAttempts > 0 ? totalMs / totalAttempts : 0;
+              const fmtMs = (ms: number) => {
+                if (ms <= 0) return '—';
+                if (ms < 60_000) return `${(ms / 1000).toFixed(1)}с`;
+                return `${Math.floor(ms / 60_000)}мин ${Math.round((ms % 60_000) / 1000)}с`;
+              };
 
               return (
                 <details className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 mt-6" open>
@@ -546,7 +556,7 @@ export default function Dashboard() {
                   </p>
 
                   {/* Summary cards */}
-                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                     <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
                       <p className="text-xs uppercase text-slate-500">Нийт оролдлого</p>
                       <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{totalAttempts}</p>
@@ -563,11 +573,19 @@ export default function Dashboard() {
                       overallAcc >= 0.7 ? 'bg-emerald-50 ring-emerald-200' :
                       overallAcc >= 0.4 ? 'bg-amber-50 ring-amber-200' : 'bg-red-50 ring-red-200'
                     }`}>
-                      <p className="text-xs uppercase text-slate-500">Ерөнхий нарийвчлал</p>
+                      <p className="text-xs uppercase text-slate-500">Нарийвчлал</p>
                       <p className={`mt-1 text-2xl font-bold tabular-nums ${
                         overallAcc >= 0.7 ? 'text-emerald-800' :
                         overallAcc >= 0.4 ? 'text-amber-800' : 'text-red-800'
                       }`}>{Math.round(overallAcc * 100)}%</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                      <p className="text-xs uppercase text-slate-500">Нийт хугацаа</p>
+                      <p className="mt-1 text-lg font-bold tabular-nums text-slate-800">{fmtMs(totalMs)}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                      <p className="text-xs uppercase text-slate-500">Дунд. хугацаа</p>
+                      <p className="mt-1 text-lg font-bold tabular-nums text-slate-800">{fmtMs(avgMs)}</p>
                     </div>
                   </div>
 
